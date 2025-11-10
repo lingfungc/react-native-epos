@@ -10,7 +10,6 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 
@@ -199,13 +198,13 @@ export default function EventsScreen() {
               {events.length} event{events.length !== 1 ? "s" : ""} found
             </Text>
           </View>
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={styles.createButton}
             onPress={createEvent}
             activeOpacity={0.7}
           >
             <Text style={styles.createButtonText}>+ Create</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </View>
       {events.length === 0 ? (
