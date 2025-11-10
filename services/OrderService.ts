@@ -3,6 +3,7 @@ import { generateRandomOrder } from "@/constants/orders";
 import database, { eventsCollection, ordersCollection } from "@/db";
 import Order from "@/models/Order";
 import { Q } from "@nozbe/watermelondb";
+import { OutboxService } from "./OutboxService";
 
 // Default values for event creation
 const DEFAULT_DEVICE_ID = "device-001";
@@ -36,6 +37,8 @@ export class OrderService {
   }): Promise<Order> {
     return await database.write(async () => {
       const now = Date.now();
+
+      const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
 
       // Parse items first
       let items: any[] = [];
@@ -96,6 +99,7 @@ export class OrderService {
         e.lamportClock = maxLamportClock + 1;
         e.status = "pending";
         e.appliedAt = now; // Mark as applied immediately
+        e.outboxId = todaysOutbox.id;
       });
 
       // Step 4: Update the order with event reference
@@ -115,6 +119,8 @@ export class OrderService {
     return await database.write(async () => {
       const order = await ordersCollection.find(orderId);
       const now = Date.now();
+
+      const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
 
       // Get current max sequence and lamport clock
       const existingEvents = await eventsCollection
@@ -144,6 +150,7 @@ export class OrderService {
         e.lamportClock = maxLamportClock + 1;
         e.status = "pending";
         e.appliedAt = now;
+        e.outboxId = todaysOutbox.id;
       });
 
       await order.update((o) => {
@@ -170,6 +177,8 @@ export class OrderService {
     return await database.write(async () => {
       const order = await ordersCollection.find(orderId);
       const now = Date.now();
+
+      const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
 
       // Get current max sequence and lamport clock
       const existingEvents = await eventsCollection
@@ -198,6 +207,7 @@ export class OrderService {
         e.lamportClock = maxLamportClock + 1;
         e.status = "pending";
         e.appliedAt = now;
+        e.outboxId = todaysOutbox.id;
       });
 
       await order.update((o) => {
@@ -255,6 +265,8 @@ export class OrderService {
       const order = await ordersCollection.find(orderId);
       const now = Date.now();
 
+      const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+
       // Get current max sequence and lamport clock
       const existingEvents = await eventsCollection
         .query(Q.sortBy("sequence", Q.desc))
@@ -282,6 +294,7 @@ export class OrderService {
         e.lamportClock = maxLamportClock + 1;
         e.status = "pending";
         e.appliedAt = now;
+        e.outboxId = todaysOutbox.id;
       });
 
       // Recalculate totals
@@ -317,6 +330,8 @@ export class OrderService {
       const order = await ordersCollection.find(orderId);
       const now = Date.now();
 
+      const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+
       // Get current max sequence and lamport clock
       const existingEvents = await eventsCollection
         .query(Q.sortBy("sequence", Q.desc))
@@ -344,6 +359,7 @@ export class OrderService {
         e.lamportClock = maxLamportClock + 1;
         e.status = "pending";
         e.appliedAt = now;
+        e.outboxId = todaysOutbox.id;
       });
 
       await order.update((o) => {

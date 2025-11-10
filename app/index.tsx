@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { OutboxService } from "@/services/OutboxService";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import EventsScreen from "./events";
 import OrdersScreen from "./orders";
@@ -8,6 +9,32 @@ type Tab = "orders" | "events" | "outbox";
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("orders");
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    // Initialize today's outbox when app opens
+    const initializeOutbox = async () => {
+      try {
+        const outbox = await OutboxService.getOrCreateTodaysOutbox();
+        console.log("✅ Today's outbox initialized:", outbox.date);
+        setIsInitialized(true);
+      } catch (error) {
+        console.error("❌ Failed to initialize outbox:", error);
+        setIsInitialized(true); // Still allow app to load
+      }
+    };
+
+    initializeOutbox();
+  }, []);
+
+  // Optional: Show loading state while initializing
+  if (!isInitialized) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={styles.loadingText}>Initializing...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -95,23 +122,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f5f5f5",
   },
-  header: {
-    backgroundColor: "#ffffff",
-    paddingTop: 60,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+  centerContent: {
+    justifyContent: "center",
+    alignItems: "center",
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#1a1a1a",
+  loadingText: {
+    fontSize: 16,
+    color: "#666",
   },
   content: {
     flex: 1,

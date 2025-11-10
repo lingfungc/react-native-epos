@@ -1,7 +1,7 @@
 import { outboxCollection } from "@/db";
+import Event from "@/models/Event";
 import type { OutboxStatus } from "@/models/Outbox";
 import Outbox from "@/models/Outbox";
-import Event from "@/models/Event";
 import { Q } from "@nozbe/watermelondb";
 import React, { useEffect, useState } from "react";
 import {
@@ -14,7 +14,8 @@ import {
   View,
 } from "react-native";
 
-type OutboxWithEvents = Outbox & {
+type OutboxWithEvents = {
+  outbox: Outbox;
   events: Event[];
 };
 
@@ -36,10 +37,19 @@ export default function OutboxScreen() {
           outboxesData.map(async (outbox) => {
             const events = await outbox.events.fetch();
             return {
-              ...outbox,
+              outbox: outbox,
               events: events,
-            } as OutboxWithEvents;
+            };
           })
+        );
+
+        console.log("Outboxes loaded:", outboxesWithEvents.length);
+        console.log(
+          "Events per outbox:",
+          outboxesWithEvents.map((o) => ({
+            date: o.outbox.date,
+            eventCount: o.events.length,
+          }))
         );
 
         setOutboxes(outboxesWithEvents);
@@ -77,9 +87,9 @@ export default function OutboxScreen() {
       outboxesData.map(async (outbox) => {
         const events = await outbox.events.fetch();
         return {
-          ...outbox,
+          outbox: outbox,
           events: events,
-        } as OutboxWithEvents;
+        };
       })
     );
 
@@ -151,7 +161,7 @@ export default function OutboxScreen() {
         </View>
         <View style={styles.eventDetails}>
           <Text style={styles.eventDetailText}>
-            Entity: {event.entity} ({event.entityId})
+            Entity: {event.entity} ({event.entityId.slice(-8)})
           </Text>
           <Text style={styles.eventDetailText}>
             Sequence: {event.sequence} | Lamport: {event.lamportClock}
@@ -170,53 +180,59 @@ export default function OutboxScreen() {
   };
 
   const renderOutboxItem = ({ item }: { item: OutboxWithEvents }) => {
+    const { outbox, events } = item;
+
     return (
       <View style={styles.outboxCard}>
         <View style={styles.outboxHeader}>
           <View style={styles.outboxHeaderLeft}>
-            <Text style={styles.outboxDate}>{formatDateString(item.date)}</Text>
-            <Text style={styles.outboxId}>ID: {item.id.slice(-8)}</Text>
+            <Text style={styles.outboxDate}>
+              {formatDateString(outbox.date)}
+            </Text>
+            <Text style={styles.outboxId}>ID: {outbox.id.slice(-8)}</Text>
           </View>
           <View
             style={[
               styles.statusBadge,
-              { backgroundColor: getStatusColor(item.status) },
+              { backgroundColor: getStatusColor(outbox.status) },
             ]}
           >
-            <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+            <Text style={styles.statusText}>{outbox.status.toUpperCase()}</Text>
           </View>
         </View>
 
         <View style={styles.outboxDetails}>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Status:</Text>
-            <Text style={styles.detailValue}>{item.status}</Text>
+            <Text style={styles.detailValue}>{outbox.status}</Text>
           </View>
-          {item.syncedAt && (
+          {outbox.syncedAt && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Synced At:</Text>
               <Text style={styles.detailValue}>
-                {formatDate(item.syncedAt)}
+                {formatDate(outbox.syncedAt)}
               </Text>
             </View>
           )}
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Created At:</Text>
-            <Text style={styles.detailValue}>{formatDate(item.createdAt)}</Text>
+            <Text style={styles.detailValue}>
+              {formatDate(outbox.createdAt)}
+            </Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Updated At:</Text>
-            <Text style={styles.detailValue}>{formatDate(item.updatedAt)}</Text>
+            <Text style={styles.detailValue}>
+              {formatDate(outbox.updatedAt)}
+            </Text>
           </View>
         </View>
 
         <View style={styles.eventsSection}>
           <View style={styles.eventsHeader}>
-            <Text style={styles.eventsTitle}>
-              Events ({item.events.length})
-            </Text>
+            <Text style={styles.eventsTitle}>Events ({events.length})</Text>
           </View>
-          {item.events.length === 0 ? (
+          {events.length === 0 ? (
             <View style={styles.noEventsContainer}>
               <Text style={styles.noEventsText}>No events in this outbox</Text>
             </View>
@@ -226,7 +242,7 @@ export default function OutboxScreen() {
               nestedScrollEnabled={true}
               showsVerticalScrollIndicator={false}
             >
-              {item.events.map((event, index) => renderEventItem(event, index))}
+              {events.map((event, index) => renderEventItem(event, index))}
             </ScrollView>
           )}
         </View>
@@ -250,8 +266,7 @@ export default function OutboxScreen() {
           <View style={styles.headerTextContainer}>
             <Text style={styles.headerTitle}>Outbox</Text>
             <Text style={styles.headerSubtitle}>
-              {outboxes.length} outbox{outboxes.length !== 1 ? "es" : ""}{" "}
-              found
+              {outboxes.length} outbox{outboxes.length !== 1 ? "es" : ""} found
             </Text>
           </View>
         </View>
@@ -267,7 +282,7 @@ export default function OutboxScreen() {
         <FlatList
           data={outboxes}
           renderItem={renderOutboxItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.outbox.id}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />

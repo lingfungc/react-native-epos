@@ -1,6 +1,7 @@
 import database, { eventsCollection } from "@/db";
 import Event, { EntityType, EventStatus, EventType } from "@/models/Event";
 import { Q } from "@nozbe/watermelondb";
+import { OutboxService } from "./OutboxService";
 
 export class EventService {
   /**
@@ -17,6 +18,8 @@ export class EventService {
     venueId: string;
   }): Promise<Event> {
     return await database.write(async () => {
+      const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+
       // Get the current max sequence and lamport clock
       const existingEvents = await eventsCollection
         .query(Q.sortBy("sequence", Q.desc))
@@ -39,6 +42,7 @@ export class EventService {
         event.venueId = eventData.venueId;
         event.lamportClock = maxLamportClock + 1;
         event.status = "pending";
+        event.outboxId = todaysOutbox.id;
       });
     });
   }
