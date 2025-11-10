@@ -1,4 +1,5 @@
-import database from "@/db";
+import { DEFAULT_EVENT_VALUES } from "@/constants/events";
+import database, { eventsCollection } from "@/db";
 import type { EventStatus } from "@/models/Event";
 import Event from "@/models/Event";
 import { Q } from "@nozbe/watermelondb";
@@ -9,6 +10,7 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 
@@ -18,8 +20,7 @@ export default function EventsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    const subscription = database
-      .get<Event>("events")
+    const subscription = eventsCollection
       .query(Q.sortBy("created_at", Q.desc))
       .observe()
       .subscribe((eventsData) => {
@@ -37,6 +38,39 @@ export default function EventsScreen() {
     // The observe subscription will automatically update when data changes
     // Just wait a moment for the refresh to complete
     setTimeout(() => setRefreshing(false), 500);
+  };
+
+  const createEvent = async () => {
+    try {
+      // Get the current max sequence to increment it
+      const existingEvents = await eventsCollection
+        .query(Q.sortBy("sequence", Q.desc))
+        .fetch();
+      const maxSequence =
+        existingEvents.length > 0 ? existingEvents[0].sequence : 0;
+
+      // Get the current max lamport clock to increment it
+      const maxLamportClock =
+        existingEvents.length > 0 ? existingEvents[0].lamportClock : 0;
+
+      await database.write(async () => {
+        await eventsCollection.create((event) => {
+          event.sequence = maxSequence + 1;
+          event.entity = DEFAULT_EVENT_VALUES.entity;
+          event.entityId = `${DEFAULT_EVENT_VALUES.entity}-${Date.now()}`;
+          event.type = DEFAULT_EVENT_VALUES.type;
+          event.payloadJson = DEFAULT_EVENT_VALUES.payloadJson;
+          event.deviceId = DEFAULT_EVENT_VALUES.deviceId;
+          event.relayId = DEFAULT_EVENT_VALUES.relayId;
+          event.userId = DEFAULT_EVENT_VALUES.userId;
+          event.venueId = DEFAULT_EVENT_VALUES.venueId;
+          event.lamportClock = maxLamportClock + 1;
+          event.status = DEFAULT_EVENT_VALUES.status;
+        });
+      });
+    } catch (error) {
+      console.error("Error creating event:", error);
+    }
   };
 
   const formatDate = (timestamp: number | undefined): string => {
@@ -158,10 +192,21 @@ export default function EventsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Events</Text>
-        <Text style={styles.headerSubtitle}>
-          {events.length} event{events.length !== 1 ? "s" : ""} found
-        </Text>
+        <View style={styles.headerContent}>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>Events</Text>
+            <Text style={styles.headerSubtitle}>
+              {events.length} event{events.length !== 1 ? "s" : ""} found
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={createEvent}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.createButtonText}>+ Create</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       {events.length === 0 ? (
         <View style={styles.centerContainer}>
@@ -202,6 +247,14 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 16,
   },
+  headerContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: "bold",
@@ -211,6 +264,18 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 14,
     color: "#E3F2FD",
+  },
+  createButton: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginLeft: 12,
+  },
+  createButtonText: {
+    color: "#2196F3",
+    fontSize: 16,
+    fontWeight: "600",
   },
   loadingText: {
     marginTop: 12,

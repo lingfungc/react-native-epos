@@ -29,3 +29,4 @@ const database = new Database({
 
 export default database;
 
+export const eventsCollection = database.get<Event>("events");
