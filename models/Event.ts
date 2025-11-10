@@ -1,5 +1,12 @@
-import { Model } from "@nozbe/watermelondb";
-import { date, field, readonly, text } from "@nozbe/watermelondb/decorators";
+import { Model, Relation } from "@nozbe/watermelondb";
+import {
+  date,
+  field,
+  readonly,
+  relation,
+  text,
+} from "@nozbe/watermelondb/decorators";
+import Outbox from "./Outbox";
 
 export type EntityType =
   | "table"
@@ -30,6 +37,11 @@ export type EventStatus = "pending" | "acked" | "rejected";
 export default class Event extends Model {
   static table = "events";
 
+  // Define the relationship: event belongs to an outbox
+  static associations = {
+    outbox: { type: "belongs_to", key: "outbox_id" },
+  } as const;
+
   @field("sequence") sequence!: number;
   @text("entity") entity!: EntityType;
   @text("entity_id") entityId!: string;
@@ -46,4 +58,10 @@ export default class Event extends Model {
   @text("status") status!: EventStatus;
   @text("error_message") errorMessage?: string;
   @date("acked_at") ackedAt?: number;
+
+  // Foreign key to outbox
+  @text("outbox_id") outboxId!: string;
+
+  // Relation to get the parent outbox
+  @relation("outbox", "outbox_id") outbox!: Relation<Outbox>;
 }

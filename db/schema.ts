@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from "@nozbe/watermelondb";
 
 export default appSchema({
-  version: 2,
+  version: 5,
   tables: [
     tableSchema({
       name: "events",
@@ -22,6 +22,7 @@ export default appSchema({
         { name: "status", type: "string" },
         { name: "error_message", type: "string", isOptional: true },
         { name: "acked_at", type: "number", isOptional: true },
+        { name: "outbox_id", type: "string", isIndexed: true },
       ],
     }),
     tableSchema({
@@ -47,6 +48,16 @@ export default appSchema({
         { name: "total_cents", type: "number" },
         { name: "created_by_event_id", type: "string", isIndexed: true },
         { name: "updated_by_event_id", type: "string", isIndexed: true },
+        { name: "created_at", type: "number" },
+        { name: "updated_at", type: "number" },
+      ],
+    }),
+    tableSchema({
+      name: "outbox",
+      columns: [
+        { name: "date", type: "string", isIndexed: true },
+        { name: "status", type: "string", isIndexed: true },
+        { name: "synced_at", type: "number", isOptional: true },
         { name: "created_at", type: "number" },
         { name: "updated_at", type: "number" },
       ],

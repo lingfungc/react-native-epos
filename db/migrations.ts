@@ -1,6 +1,8 @@
 import {
+  addColumns,
   createTable,
   schemaMigrations,
+  unsafeExecuteSql,
 } from "@nozbe/watermelondb/Schema/migrations";
 
 export default schemaMigrations({
@@ -36,6 +38,50 @@ export default schemaMigrations({
             { name: "total_cents", type: "number" },
             { name: "created_by_event_id", type: "string", isIndexed: true },
             { name: "updated_by_event_id", type: "string", isIndexed: true },
+            { name: "created_at", type: "number" },
+            { name: "updated_at", type: "number" },
+          ],
+        }),
+      ],
+    },
+    {
+      toVersion: 3,
+      steps: [
+        createTable({
+          name: "outbox",
+          columns: [
+            { name: "entity", type: "string", isIndexed: true },
+            { name: "entity_id", type: "string", isIndexed: true },
+            { name: "type", type: "string", isIndexed: true },
+            { name: "payload_json", type: "string" },
+            { name: "event_id", type: "string", isIndexed: true },
+            { name: "created_at", type: "number" },
+            { name: "updated_at", type: "number" },
+          ],
+        }),
+      ],
+    },
+    {
+      toVersion: 4,
+      steps: [
+        addColumns({
+          table: "events",
+          columns: [{ name: "outbox_id", type: "string", isIndexed: true }],
+        }),
+      ],
+    },
+    {
+      toVersion: 5,
+      steps: [
+        // Drop the old outbox table
+        unsafeExecuteSql("DROP TABLE IF EXISTS outbox;"),
+        // Recreate with correct structure
+        createTable({
+          name: "outbox",
+          columns: [
+            { name: "date", type: "string", isIndexed: true },
+            { name: "status", type: "string", isIndexed: true },
+            { name: "synced_at", type: "number", isOptional: true },
             { name: "created_at", type: "number" },
             { name: "updated_at", type: "number" },
           ],
