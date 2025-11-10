@@ -23,7 +23,7 @@ export default class Order extends Model {
   @text("items_json") itemsJson!: string;
 
   // Timestamps
-  @readonly @date("opened_at") openedAt!: number;
+  @date("opened_at") openedAt!: number;
   @date("closed_at") closedAt?: number;
   @date("voided_at") voidedAt?: number;
 

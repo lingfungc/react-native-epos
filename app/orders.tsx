@@ -1,4 +1,5 @@
-import { ordersCollection } from "@/db";
+import { generateRandomOrder } from "@/constants/orders";
+import database, { ordersCollection } from "@/db";
 import Order from "@/models/Order";
 import { Q } from "@nozbe/watermelondb";
 import React, { useEffect, useState } from "react";
@@ -8,6 +9,7 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 
@@ -37,6 +39,32 @@ export default function OrdersScreen() {
     // The observe subscription will automatically update when data changes
     // Just wait a moment for the refresh to complete
     setTimeout(() => setRefreshing(false), 500);
+  };
+
+  const createOrder = async () => {
+    try {
+      const orderData = generateRandomOrder();
+
+      await database.write(async () => {
+        const now = Date.now();
+        await ordersCollection.create((order) => {
+          order.status = orderData.status;
+          order.tableId = orderData.tableId;
+          order.guestId = orderData.guestId;
+          order.itemsJson = orderData.itemsJson;
+          order.openedAt = now;
+          order.subtotalCents = orderData.subtotalCents;
+          order.discountCents = orderData.discountCents;
+          order.taxCents = orderData.taxCents;
+          order.troncCents = orderData.troncCents;
+          order.totalCents = orderData.totalCents;
+          order.createdByEventId = "";
+          order.updatedByEventId = "";
+        });
+      });
+    } catch (error) {
+      console.error("Error creating order:", error);
+    }
   };
 
   const formatDate = (timestamp: number | undefined): string => {
@@ -108,13 +136,17 @@ export default function OrdersScreen() {
           {item.closedAt && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Closed At:</Text>
-              <Text style={styles.detailValue}>{formatDate(item.closedAt)}</Text>
+              <Text style={styles.detailValue}>
+                {formatDate(item.closedAt)}
+              </Text>
             </View>
           )}
           {item.voidedAt && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Voided At:</Text>
-              <Text style={styles.detailValue}>{formatDate(item.voidedAt)}</Text>
+              <Text style={styles.detailValue}>
+                {formatDate(item.voidedAt)}
+              </Text>
             </View>
           )}
 
@@ -191,11 +223,15 @@ export default function OrdersScreen() {
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Created At:</Text>
-              <Text style={styles.detailValue}>{formatDate(item.createdAt)}</Text>
+              <Text style={styles.detailValue}>
+                {formatDate(item.createdAt)}
+              </Text>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Updated At:</Text>
-              <Text style={styles.detailValue}>{formatDate(item.updatedAt)}</Text>
+              <Text style={styles.detailValue}>
+                {formatDate(item.updatedAt)}
+              </Text>
             </View>
           </View>
         </View>
@@ -222,6 +258,13 @@ export default function OrdersScreen() {
               {orders.length} order{orders.length !== 1 ? "s" : ""} found
             </Text>
           </View>
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={createOrder}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.createButtonText}>+ Create</Text>
+          </TouchableOpacity>
         </View>
       </View>
       {orders.length === 0 ? (
@@ -283,6 +326,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#E3F2FD",
     opacity: 0.9,
+  },
+  createButton: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  createButtonText: {
+    color: "#2196F3",
+    fontSize: 15,
+    fontWeight: "600",
   },
   loadingText: {
     marginTop: 12,
