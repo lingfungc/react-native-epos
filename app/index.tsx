@@ -2,8 +2,9 @@ import { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import EventsScreen from "./events";
 import OrdersScreen from "./orders";
+import OutboxScreen from "./outbox";
 
-type Tab = "orders" | "events";
+type Tab = "orders" | "events" | "outbox";
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("orders");
@@ -12,7 +13,9 @@ export default function Index() {
     <View style={styles.container}>
       {/* Content */}
       <View style={styles.content}>
-        {activeTab === "orders" ? <OrdersScreen /> : <EventsScreen />}
+        {activeTab === "orders" && <OrdersScreen />}
+        {activeTab === "events" && <EventsScreen />}
+        {activeTab === "outbox" && <OutboxScreen />}
       </View>
 
       {/* Bottom Navigation */}
@@ -58,6 +61,28 @@ export default function Index() {
             ]}
           >
             Events
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => setActiveTab("outbox")}
+        >
+          <View
+            style={[
+              styles.iconContainer,
+              activeTab === "outbox" && styles.iconContainerActive,
+            ]}
+          >
+            <Text style={styles.icon}>📤</Text>
+          </View>
+          <Text
+            style={[
+              styles.navText,
+              activeTab === "outbox" && styles.navTextActive,
+            ]}
+          >
+            Outbox
           </Text>
         </TouchableOpacity>
       </View>

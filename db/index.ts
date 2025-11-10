@@ -3,6 +3,7 @@ import SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 
 import Event from "@/models/Event";
 import Order from "@/models/Order";
+import Outbox from "@/models/Outbox";
 import migrations from "./migrations";
 import schema from "./schema";
 
@@ -25,10 +26,11 @@ const adapter = new SQLiteAdapter({
 // Then, make a Watermelon database from it!
 const database = new Database({
   adapter,
-  modelClasses: [Event, Order],
+  modelClasses: [Event, Order, Outbox],
 });
 
 export default database;
 
 export const eventsCollection = database.get<Event>("events");
 export const ordersCollection = database.get<Order>("orders");
+export const outboxCollection = database.get<Outbox>("outbox");
