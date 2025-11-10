@@ -1,7 +1,14 @@
+// services/OrderService.ts
 import { generateRandomOrder } from "@/constants/orders";
-import database, { ordersCollection } from "@/db";
+import database, { eventsCollection, ordersCollection } from "@/db";
 import Order from "@/models/Order";
 import { Q } from "@nozbe/watermelondb";
+
+// Default values for event creation
+const DEFAULT_DEVICE_ID = "device-001";
+const DEFAULT_RELAY_ID = "relay-001";
+const DEFAULT_USER_ID = "user-001";
+const DEFAULT_VENUE_ID = "venue-001";
 
 export class OrderService {
   /**
@@ -29,21 +36,75 @@ export class OrderService {
   }): Promise<Order> {
     return await database.write(async () => {
       const now = Date.now();
-      return await ordersCollection.create((order) => {
-        order.status = orderData.status;
-        order.tableId = orderData.tableId;
-        order.guestId = orderData.guestId;
-        order.reservationId = orderData.reservationId;
-        order.itemsJson = orderData.itemsJson;
-        order.openedAt = now;
-        order.subtotalCents = orderData.subtotalCents;
-        order.discountCents = orderData.discountCents;
-        order.taxCents = orderData.taxCents;
-        order.troncCents = orderData.troncCents;
-        order.totalCents = orderData.totalCents;
-        order.createdByEventId = "";
-        order.updatedByEventId = "";
+
+      // Parse items first
+      let items: any[] = [];
+      try {
+        items = JSON.parse(orderData.itemsJson);
+      } catch (e) {
+        console.error("Failed to parse items JSON:", e);
+      }
+
+      // Step 1: Get the current max sequence and lamport clock for event
+      const existingEvents = await eventsCollection
+        .query(Q.sortBy("sequence", Q.desc))
+        .fetch();
+
+      const maxSequence =
+        existingEvents.length > 0 ? existingEvents[0].sequence : 0;
+      const maxLamportClock =
+        existingEvents.length > 0 ? existingEvents[0].lamportClock : 0;
+
+      // Step 2: Create the order first (with empty event IDs temporarily)
+      const order = await ordersCollection.create((o) => {
+        o.status = orderData.status;
+        o.tableId = orderData.tableId;
+        o.guestId = orderData.guestId;
+        o.reservationId = orderData.reservationId;
+        o.itemsJson = orderData.itemsJson;
+        o.openedAt = now;
+        o.subtotalCents = orderData.subtotalCents;
+        o.discountCents = orderData.discountCents;
+        o.taxCents = orderData.taxCents;
+        o.troncCents = orderData.troncCents;
+        o.totalCents = orderData.totalCents;
+        o.createdByEventId = "";
+        o.updatedByEventId = "";
       });
+
+      // Step 3: Create the event with the actual order ID
+      const event = await eventsCollection.create((e) => {
+        e.sequence = maxSequence + 1;
+        e.entity = "order";
+        e.entityId = order.id;
+        e.type = "add_item";
+        e.payloadJson = JSON.stringify({
+          items: items,
+          orderId: order.id,
+          tableId: orderData.tableId,
+          guestId: orderData.guestId,
+          subtotalCents: orderData.subtotalCents,
+          discountCents: orderData.discountCents,
+          taxCents: orderData.taxCents,
+          troncCents: orderData.troncCents,
+          totalCents: orderData.totalCents,
+        });
+        e.deviceId = DEFAULT_DEVICE_ID;
+        e.relayId = DEFAULT_RELAY_ID;
+        e.userId = DEFAULT_USER_ID;
+        e.venueId = DEFAULT_VENUE_ID;
+        e.lamportClock = maxLamportClock + 1;
+        e.status = "pending";
+        e.appliedAt = now; // Mark as applied immediately
+      });
+
+      // Step 4: Update the order with event reference
+      await order.update((o) => {
+        o.createdByEventId = event.id;
+        o.updatedByEventId = event.id;
+      });
+
+      return order;
     });
   }
 
@@ -53,10 +114,44 @@ export class OrderService {
   static async closeOrder(orderId: string): Promise<Order> {
     return await database.write(async () => {
       const order = await ordersCollection.find(orderId);
+      const now = Date.now();
+
+      // Get current max sequence and lamport clock
+      const existingEvents = await eventsCollection
+        .query(Q.sortBy("sequence", Q.desc))
+        .fetch();
+
+      const maxSequence =
+        existingEvents.length > 0 ? existingEvents[0].sequence : 0;
+      const maxLamportClock =
+        existingEvents.length > 0 ? existingEvents[0].lamportClock : 0;
+
+      // Create close_check event
+      const event = await eventsCollection.create((e) => {
+        e.sequence = maxSequence + 1;
+        e.entity = "order";
+        e.entityId = order.id;
+        e.type = "close_check";
+        e.payloadJson = JSON.stringify({
+          orderId: order.id,
+          closedAt: now,
+          totalCents: order.totalCents,
+        });
+        e.deviceId = DEFAULT_DEVICE_ID;
+        e.relayId = DEFAULT_RELAY_ID;
+        e.userId = DEFAULT_USER_ID;
+        e.venueId = DEFAULT_VENUE_ID;
+        e.lamportClock = maxLamportClock + 1;
+        e.status = "pending";
+        e.appliedAt = now;
+      });
+
       await order.update((o) => {
         o.status = "closed";
-        o.closedAt = Date.now();
+        o.closedAt = now;
+        o.updatedByEventId = event.id;
       });
+
       return order;
     });
   }
@@ -65,13 +160,7 @@ export class OrderService {
    * Close an existing order instance
    */
   static async closeOrderInstance(order: Order): Promise<Order> {
-    return await database.write(async () => {
-      await order.update((o) => {
-        o.status = "closed";
-        o.closedAt = Date.now();
-      });
-      return order;
-    });
+    return await this.closeOrder(order.id);
   }
 
   /**
@@ -80,10 +169,43 @@ export class OrderService {
   static async voidOrder(orderId: string): Promise<Order> {
     return await database.write(async () => {
       const order = await ordersCollection.find(orderId);
+      const now = Date.now();
+
+      // Get current max sequence and lamport clock
+      const existingEvents = await eventsCollection
+        .query(Q.sortBy("sequence", Q.desc))
+        .fetch();
+
+      const maxSequence =
+        existingEvents.length > 0 ? existingEvents[0].sequence : 0;
+      const maxLamportClock =
+        existingEvents.length > 0 ? existingEvents[0].lamportClock : 0;
+
+      // Create void_item event
+      const event = await eventsCollection.create((e) => {
+        e.sequence = maxSequence + 1;
+        e.entity = "order";
+        e.entityId = order.id;
+        e.type = "void_item";
+        e.payloadJson = JSON.stringify({
+          orderId: order.id,
+          voidedAt: now,
+        });
+        e.deviceId = DEFAULT_DEVICE_ID;
+        e.relayId = DEFAULT_RELAY_ID;
+        e.userId = DEFAULT_USER_ID;
+        e.venueId = DEFAULT_VENUE_ID;
+        e.lamportClock = maxLamportClock + 1;
+        e.status = "pending";
+        e.appliedAt = now;
+      });
+
       await order.update((o) => {
         o.status = "voided";
-        o.voidedAt = Date.now();
+        o.voidedAt = now;
+        o.updatedByEventId = event.id;
       });
+
       return order;
     });
   }
@@ -92,13 +214,7 @@ export class OrderService {
    * Void an existing order instance
    */
   static async voidOrderInstance(order: Order): Promise<Order> {
-    return await database.write(async () => {
-      await order.update((o) => {
-        o.status = "voided";
-        o.voidedAt = Date.now();
-      });
-      return order;
-    });
+    return await this.voidOrder(order.id);
   }
 
   /**
@@ -137,6 +253,36 @@ export class OrderService {
   static async updateOrderItems(orderId: string, items: any[]): Promise<Order> {
     return await database.write(async () => {
       const order = await ordersCollection.find(orderId);
+      const now = Date.now();
+
+      // Get current max sequence and lamport clock
+      const existingEvents = await eventsCollection
+        .query(Q.sortBy("sequence", Q.desc))
+        .fetch();
+
+      const maxSequence =
+        existingEvents.length > 0 ? existingEvents[0].sequence : 0;
+      const maxLamportClock =
+        existingEvents.length > 0 ? existingEvents[0].lamportClock : 0;
+
+      // Create change_quantity event
+      const event = await eventsCollection.create((e) => {
+        e.sequence = maxSequence + 1;
+        e.entity = "order";
+        e.entityId = order.id;
+        e.type = "change_quantity";
+        e.payloadJson = JSON.stringify({
+          orderId: order.id,
+          items: items,
+        });
+        e.deviceId = DEFAULT_DEVICE_ID;
+        e.relayId = DEFAULT_RELAY_ID;
+        e.userId = DEFAULT_USER_ID;
+        e.venueId = DEFAULT_VENUE_ID;
+        e.lamportClock = maxLamportClock + 1;
+        e.status = "pending";
+        e.appliedAt = now;
+      });
 
       // Recalculate totals
       const subtotal = items.reduce(
@@ -153,6 +299,7 @@ export class OrderService {
         o.taxCents = tax;
         o.troncCents = tronc;
         o.totalCents = total;
+        o.updatedByEventId = event.id;
       });
 
       return order;
@@ -168,11 +315,42 @@ export class OrderService {
   ): Promise<Order> {
     return await database.write(async () => {
       const order = await ordersCollection.find(orderId);
+      const now = Date.now();
+
+      // Get current max sequence and lamport clock
+      const existingEvents = await eventsCollection
+        .query(Q.sortBy("sequence", Q.desc))
+        .fetch();
+
+      const maxSequence =
+        existingEvents.length > 0 ? existingEvents[0].sequence : 0;
+      const maxLamportClock =
+        existingEvents.length > 0 ? existingEvents[0].lamportClock : 0;
+
+      // Create apply_discount event
+      const event = await eventsCollection.create((e) => {
+        e.sequence = maxSequence + 1;
+        e.entity = "order";
+        e.entityId = order.id;
+        e.type = "apply_discount";
+        e.payloadJson = JSON.stringify({
+          orderId: order.id,
+          discountCents: discountCents,
+        });
+        e.deviceId = DEFAULT_DEVICE_ID;
+        e.relayId = DEFAULT_RELAY_ID;
+        e.userId = DEFAULT_USER_ID;
+        e.venueId = DEFAULT_VENUE_ID;
+        e.lamportClock = maxLamportClock + 1;
+        e.status = "pending";
+        e.appliedAt = now;
+      });
 
       await order.update((o) => {
         o.discountCents = discountCents;
         o.totalCents =
           o.subtotalCents - discountCents + o.taxCents + o.troncCents;
+        o.updatedByEventId = event.id;
       });
 
       return order;
@@ -212,5 +390,18 @@ export class OrderService {
    */
   static canModifyOrder(order: Order): boolean {
     return order.status === "open";
+  }
+
+  /**
+   * Get events for an order
+   */
+  static async getOrderEvents(orderId: string) {
+    return await eventsCollection
+      .query(
+        Q.where("entity", "order"),
+        Q.where("entity_id", orderId),
+        Q.sortBy("sequence", Q.desc)
+      )
+      .fetch();
   }
 }
