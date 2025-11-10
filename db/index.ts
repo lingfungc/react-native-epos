@@ -26,3 +26,6 @@ const database = new Database({
   adapter,
   modelClasses: [Event],
 });
+
+export default database;
+
