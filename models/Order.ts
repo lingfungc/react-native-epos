@@ -19,6 +19,9 @@ export default class Order extends Model {
   @text("guest_id") guestId?: string;
   @text("reservation_id") reservationId?: string;
 
+  // Items stored as JSON array
+  @text("items_json") itemsJson!: string;
+
   // Timestamps
   @readonly @date("opened_at") openedAt!: number;
   @date("closed_at") closedAt?: number;
