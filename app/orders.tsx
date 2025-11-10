@@ -1,6 +1,6 @@
-import { generateRandomOrder } from "@/constants/orders";
-import database, { ordersCollection } from "@/db";
+import { ordersCollection } from "@/db";
 import Order from "@/models/Order";
+import { OrderService } from "@/services/OrderService";
 import { Q } from "@nozbe/watermelondb";
 import React, { useEffect, useState } from "react";
 import {
@@ -43,25 +43,7 @@ export default function OrdersScreen() {
 
   const createOrder = async () => {
     try {
-      const orderData = generateRandomOrder();
-
-      await database.write(async () => {
-        const now = Date.now();
-        await ordersCollection.create((order) => {
-          order.status = orderData.status;
-          order.tableId = orderData.tableId;
-          order.guestId = orderData.guestId;
-          order.itemsJson = orderData.itemsJson;
-          order.openedAt = now;
-          order.subtotalCents = orderData.subtotalCents;
-          order.discountCents = orderData.discountCents;
-          order.taxCents = orderData.taxCents;
-          order.troncCents = orderData.troncCents;
-          order.totalCents = orderData.totalCents;
-          order.createdByEventId = "";
-          order.updatedByEventId = "";
-        });
-      });
+      await OrderService.createRandomOrder();
     } catch (error) {
       console.error("Error creating order:", error);
     }
