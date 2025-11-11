@@ -206,6 +206,14 @@ export default function OutboxScreen() {
             <Text style={styles.detailLabel}>Status:</Text>
             <Text style={styles.detailValue}>{outbox.status}</Text>
           </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Device Id:</Text>
+            <Text style={styles.detailValue}>{outbox.deviceId}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Venue Id:</Text>
+            <Text style={styles.detailValue}>{outbox.venueId}</Text>
+          </View>
           {outbox.syncedAt && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Synced At:</Text>

@@ -1,6 +1,13 @@
+import { DatabaseService } from "@/services/DatabaseService";
 import { OutboxService } from "@/services/OutboxService";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import EventsScreen from "./events";
 import OrdersScreen from "./orders";
 import OutboxScreen from "./outboxes";
@@ -26,6 +33,37 @@ export default function Index() {
 
     initializeOutbox();
   }, []);
+
+  const handleResetDatabase = () => {
+    Alert.alert(
+      "Reset Database",
+      "Are you sure you want to delete all data? This will remove all orders, events, and outboxes. This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await DatabaseService.resetDatabase();
+              // Reinitialize today's outbox after reset
+              await OutboxService.getOrCreateTodaysOutbox();
+              Alert.alert("Success", "Database has been reset successfully.");
+            } catch (error) {
+              console.error("Error resetting database:", error);
+              Alert.alert(
+                "Error",
+                "Failed to reset database. Please try again."
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Optional: Show loading state while initializing
   if (!isInitialized) {
@@ -112,6 +150,18 @@ export default function Index() {
             Outbox
           </Text>
         </TouchableOpacity>
+
+        {/* Reset DB Button */}
+        <TouchableOpacity
+          style={styles.resetButton}
+          onPress={handleResetDatabase}
+          activeOpacity={0.7}
+        >
+          <View style={styles.resetIconContainer}>
+            <Text style={styles.resetIcon}>🗑️</Text>
+          </View>
+          <Text style={styles.resetButtonText}>Reset</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -145,6 +195,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 8,
+    alignItems: "flex-start",
   },
   navButton: {
     flex: 1,
@@ -174,5 +225,31 @@ const styles = StyleSheet.create({
   navTextActive: {
     color: "#2563eb",
     fontWeight: "600",
+  },
+  resetButton: {
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    minWidth: 60,
+  },
+  resetIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+    backgroundColor: "#fff5f5",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  resetIcon: {
+    fontSize: 20,
+  },
+  resetButtonText: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#dc2626",
+    marginTop: 4,
   },
 });
