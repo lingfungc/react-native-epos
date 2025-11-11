@@ -16,8 +16,9 @@ import EventsScreen from "./events";
 import JournalsScreen from "./journals";
 import OrdersScreen from "./orders";
 import OutboxScreen from "./outboxes";
+import TcpConnectionScreen from "./tcp";
 
-type Tab = "orders" | "events" | "outbox" | "journals";
+type Tab = "orders" | "events" | "outbox" | "journals" | "tcp";
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("orders");
@@ -120,6 +121,7 @@ export default function Index() {
         {activeTab === "events" && <EventsScreen />}
         {activeTab === "outbox" && <OutboxScreen />}
         {activeTab === "journals" && <JournalsScreen />}
+        {activeTab === "tcp" && <TcpConnectionScreen />}
       </View>
 
       {/* Bottom Navigation */}
@@ -209,6 +211,28 @@ export default function Index() {
             ]}
           >
             Journals
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => setActiveTab("tcp")}
+        >
+          <View
+            style={[
+              styles.iconContainer,
+              activeTab === "tcp" && styles.iconContainerActive,
+            ]}
+          >
+            <Text style={styles.icon}>🌐</Text>
+          </View>
+          <Text
+            style={[
+              styles.navText,
+              activeTab === "tcp" && styles.navTextActive,
+            ]}
+          >
+            TCP
           </Text>
         </TouchableOpacity>
 
