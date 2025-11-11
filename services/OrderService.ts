@@ -8,13 +8,8 @@ import database, {
 } from "@/db";
 import Order from "@/models/Order";
 import { Q } from "@nozbe/watermelondb";
+import { DeviceService } from "./DeviceService";
 import { isRelay } from "./TcpService";
-
-// Default values for event creation
-const DEFAULT_DEVICE_ID = "device-001";
-const DEFAULT_RELAY_ID = "relay-001";
-const DEFAULT_USER_ID = "user-001";
-const DEFAULT_VENUE_ID = "venue-001";
 
 export class OrderService {
   /**
@@ -36,8 +31,8 @@ export class OrderService {
     return await outboxesCollection.create((outbox) => {
       outbox.date = today;
       outbox.status = "pending";
-      outbox.deviceId = DEFAULT_DEVICE_ID;
-      outbox.venueId = DEFAULT_VENUE_ID;
+      outbox.deviceId = DeviceService.getDeviceId();
+      outbox.venueId = DeviceService.getVenueId();
     });
   }
 
@@ -62,8 +57,8 @@ export class OrderService {
       j.status = "pending";
       j.sequence = 0;
       j.source = "local";
-      j.deviceId = DEFAULT_DEVICE_ID;
-      j.venueId = DEFAULT_VENUE_ID;
+      j.deviceId = DeviceService.getDeviceId();
+      j.venueId = DeviceService.getVenueId();
     });
   }
 
@@ -156,10 +151,10 @@ export class OrderService {
           troncCents: orderData.troncCents,
           totalCents: orderData.totalCents,
         });
-        e.deviceId = DEFAULT_DEVICE_ID;
-        e.relayId = DEFAULT_RELAY_ID;
-        e.userId = DEFAULT_USER_ID;
-        e.venueId = DEFAULT_VENUE_ID;
+        e.deviceId = DeviceService.getDeviceId();
+        e.relayId = DeviceService.getRelayId();
+        e.userId = DeviceService.getUserId();
+        e.venueId = DeviceService.getVenueId();
         e.lamportClock = maxLamportClock + 1;
         e.appliedAt = now; // Mark as applied immediately
 
@@ -224,10 +219,10 @@ export class OrderService {
           closedAt: now,
           totalCents: order.totalCents,
         });
-        e.deviceId = DEFAULT_DEVICE_ID;
-        e.relayId = DEFAULT_RELAY_ID;
-        e.userId = DEFAULT_USER_ID;
-        e.venueId = DEFAULT_VENUE_ID;
+        e.deviceId = DeviceService.getDeviceId();
+        e.relayId = DeviceService.getRelayId();
+        e.userId = DeviceService.getUserId();
+        e.venueId = DeviceService.getVenueId();
         e.lamportClock = maxLamportClock + 1;
         e.appliedAt = now; // Mark as applied immediately
 
@@ -298,10 +293,10 @@ export class OrderService {
           orderId: order.id,
           voidedAt: now,
         });
-        e.deviceId = DEFAULT_DEVICE_ID;
-        e.relayId = DEFAULT_RELAY_ID;
-        e.userId = DEFAULT_USER_ID;
-        e.venueId = DEFAULT_VENUE_ID;
+        e.deviceId = DeviceService.getDeviceId();
+        e.relayId = DeviceService.getRelayId();
+        e.userId = DeviceService.getUserId();
+        e.venueId = DeviceService.getVenueId();
         e.lamportClock = maxLamportClock + 1;
         e.appliedAt = now; // Mark as applied immediately
 
@@ -402,10 +397,10 @@ export class OrderService {
           orderId: order.id,
           items: items,
         });
-        e.deviceId = DEFAULT_DEVICE_ID;
-        e.relayId = DEFAULT_RELAY_ID;
-        e.userId = DEFAULT_USER_ID;
-        e.venueId = DEFAULT_VENUE_ID;
+        e.deviceId = DeviceService.getDeviceId();
+        e.relayId = DeviceService.getRelayId();
+        e.userId = DeviceService.getUserId();
+        e.venueId = DeviceService.getVenueId();
         e.lamportClock = maxLamportClock + 1;
         e.appliedAt = now; // Mark as applied immediately
 
@@ -484,10 +479,10 @@ export class OrderService {
           orderId: order.id,
           discountCents: discountCents,
         });
-        e.deviceId = DEFAULT_DEVICE_ID;
-        e.relayId = DEFAULT_RELAY_ID;
-        e.userId = DEFAULT_USER_ID;
-        e.venueId = DEFAULT_VENUE_ID;
+        e.deviceId = DeviceService.getDeviceId();
+        e.relayId = DeviceService.getRelayId();
+        e.userId = DeviceService.getUserId();
+        e.venueId = DeviceService.getVenueId();
         e.lamportClock = maxLamportClock + 1;
         e.appliedAt = now; // Mark as applied immediately
 

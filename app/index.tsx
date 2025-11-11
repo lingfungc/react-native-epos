@@ -1,4 +1,5 @@
 import { DatabaseService } from "@/services/DatabaseService";
+import { DeviceService } from "@/services/DeviceService";
 import { JournalService } from "@/services/JournalService";
 import { OutboxService } from "@/services/OutboxService";
 import { isRelay } from "@/services/TcpService";
@@ -16,24 +17,32 @@ export default function Index() {
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    // Initialize today's outbox and journal when app opens
-    const initializeTcpConnection = async () => {
+    // Initialize device and storage when app opens
+    const initializeApp = async () => {
       try {
+        // Step 1: Initialize device information FIRST
+        await DeviceService.initialize();
+        const deviceInfo = await DeviceService.getDeviceInfo();
+        console.log("📱 Device initialized:", deviceInfo);
+
+        // Step 2: Initialize today's journal if relay
         if (isRelay) {
           const journal = await JournalService.getOrCreateTodaysJournal();
           console.log("✅ Today's journal initialized:", journal.date);
         }
 
+        // Step 3: Initialize today's outbox
         const outbox = await OutboxService.getOrCreateTodaysOutbox();
         console.log("✅ Today's outbox initialized:", outbox.date);
+
         setIsInitialized(true);
       } catch (error) {
-        console.error("❌ Failed to initialize outbox:", error);
+        console.error("❌ Failed to initialize app:", error);
         setIsInitialized(true); // Still allow app to load
       }
     };
 
-    initializeTcpConnection();
+    initializeApp();
   }, []);
 
   const handleResetDatabase = () => {

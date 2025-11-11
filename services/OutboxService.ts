@@ -1,8 +1,8 @@
-import { DEFAULT_OUTBOXES_VALUES } from "@/constants/outboxes";
 import database, { eventsCollection, outboxesCollection } from "@/db";
 import Event from "@/models/Event";
 import Outbox, { OutboxStatus } from "@/models/Outbox";
 import { Q } from "@nozbe/watermelondb";
+import { DeviceService } from "./DeviceService";
 
 export class OutboxService {
   /**
@@ -34,8 +34,8 @@ export class OutboxService {
       return await outboxesCollection.create((outbox) => {
         outbox.date = todayDate;
         outbox.status = "pending";
-        outbox.deviceId = DEFAULT_OUTBOXES_VALUES.deviceId;
-        outbox.venueId = DEFAULT_OUTBOXES_VALUES.venueId;
+        outbox.deviceId = DeviceService.getDeviceId();
+        outbox.venueId = DeviceService.getVenueId();
       });
     });
   }

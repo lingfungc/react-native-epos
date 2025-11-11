@@ -1,5 +1,4 @@
-import { DEFAULT_EVENT_VALUES } from "@/constants/events";
-import database, { eventsCollection } from "@/db";
+import { eventsCollection } from "@/db";
 import type { EventStatus } from "@/models/Event";
 import Event from "@/models/Event";
 import { Q } from "@nozbe/watermelondb";
@@ -37,39 +36,6 @@ export default function EventsScreen() {
     // The observe subscription will automatically update when data changes
     // Just wait a moment for the refresh to complete
     setTimeout(() => setRefreshing(false), 500);
-  };
-
-  const createEvent = async () => {
-    try {
-      // Get the current max sequence to increment it
-      const existingEvents = await eventsCollection
-        .query(Q.sortBy("sequence", Q.desc), Q.take(1))
-        .fetch();
-      const maxSequence =
-        existingEvents.length > 0 ? existingEvents[0].sequence : 0;
-
-      // Get the current max lamport clock to increment it
-      const maxLamportClock =
-        existingEvents.length > 0 ? existingEvents[0].lamportClock : 0;
-
-      await database.write(async () => {
-        await eventsCollection.create((event) => {
-          event.sequence = maxSequence + 1;
-          event.entity = DEFAULT_EVENT_VALUES.entity;
-          event.entityId = `${DEFAULT_EVENT_VALUES.entity}-${Date.now()}`;
-          event.type = DEFAULT_EVENT_VALUES.type;
-          event.payloadJson = DEFAULT_EVENT_VALUES.payloadJson;
-          event.deviceId = DEFAULT_EVENT_VALUES.deviceId;
-          event.relayId = DEFAULT_EVENT_VALUES.relayId;
-          event.userId = DEFAULT_EVENT_VALUES.userId;
-          event.venueId = DEFAULT_EVENT_VALUES.venueId;
-          event.lamportClock = maxLamportClock + 1;
-          event.status = DEFAULT_EVENT_VALUES.status;
-        });
-      });
-    } catch (error) {
-      console.error("Error creating event:", error);
-    }
   };
 
   const formatDate = (timestamp: number | undefined): string => {

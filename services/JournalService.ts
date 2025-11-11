@@ -2,9 +2,7 @@
 import database, { journalsCollection } from "@/db";
 import Journal from "@/models/Journal";
 import { Q } from "@nozbe/watermelondb";
-
-const DEFAULT_DEVICE_ID = "device-001";
-const DEFAULT_VENUE_ID = "venue-001";
+import { DeviceService } from "./DeviceService";
 
 export class JournalService {
   /**
@@ -29,8 +27,8 @@ export class JournalService {
         j.status = "pending";
         j.sequence = 0; // Will be updated as events are added
         j.source = "local"; // Default to local, update as needed
-        j.deviceId = DEFAULT_DEVICE_ID;
-        j.venueId = DEFAULT_VENUE_ID;
+        j.deviceId = DeviceService.getDeviceId();
+        j.venueId = DeviceService.getVenueId();
       });
 
       return journal;
