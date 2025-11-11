@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import EventsScreen from "./events";
 import OrdersScreen from "./orders";
-import OutboxScreen from "./outbox";
+import OutboxScreen from "./outboxes";
 
 type Tab = "orders" | "events" | "outbox";
 
