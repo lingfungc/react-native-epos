@@ -88,5 +88,25 @@ export default schemaMigrations({
         }),
       ],
     },
+    {
+      toVersion: 6,
+      steps: [
+        // Drop the old outbox table
+        unsafeExecuteSql("DROP TABLE IF EXISTS outbox;"),
+        // Recreate with correct structure
+        createTable({
+          name: "outboxes",
+          columns: [
+            { name: "date", type: "string", isIndexed: true },
+            { name: "status", type: "string", isIndexed: true },
+            { name: "device_id", type: "string" },
+            { name: "venue_id", type: "string" },
+            { name: "synced_at", type: "number", isOptional: true },
+            { name: "created_at", type: "number" },
+            { name: "updated_at", type: "number" },
+          ],
+        }),
+      ],
+    },
   ],
 });

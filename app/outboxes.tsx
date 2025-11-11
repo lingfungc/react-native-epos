@@ -1,4 +1,4 @@
-import { outboxCollection } from "@/db";
+import { outboxesCollection } from "@/db";
 import Event from "@/models/Event";
 import type { OutboxStatus } from "@/models/Outbox";
 import Outbox from "@/models/Outbox";
@@ -28,7 +28,7 @@ export default function OutboxScreen() {
     const loadOutboxes = async () => {
       try {
         // Fetch all outboxes sorted by date (descending)
-        const outboxesData = await outboxCollection
+        const outboxesData = await outboxesCollection
           .query(Q.sortBy("date", Q.desc))
           .fetch();
 
@@ -66,7 +66,7 @@ export default function OutboxScreen() {
     loadOutboxes();
 
     // Subscribe to changes
-    const subscription = outboxCollection
+    const subscription = outboxesCollection
       .query(Q.sortBy("date", Q.desc))
       .observe()
       .subscribe(() => {
@@ -79,7 +79,7 @@ export default function OutboxScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     // Reload outboxes
-    const outboxesData = await outboxCollection
+    const outboxesData = await outboxesCollection
       .query(Q.sortBy("date", Q.desc))
       .fetch();
 

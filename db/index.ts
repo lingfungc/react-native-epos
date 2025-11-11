@@ -33,4 +33,4 @@ export default database;
 
 export const eventsCollection = database.get<Event>("events");
 export const ordersCollection = database.get<Order>("orders");
-export const outboxCollection = database.get<Outbox>("outbox");
+export const outboxesCollection = database.get<Outbox>("outboxes");

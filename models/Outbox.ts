@@ -5,7 +5,7 @@ import Event from "./Event";
 export type OutboxStatus = "pending" | "syncing" | "synced";
 
 export default class Outbox extends Model {
-  static table = "outbox";
+  static table = "outboxes";
 
   // Define the relationship: one outbox has many events
   static associations = {
@@ -15,6 +15,8 @@ export default class Outbox extends Model {
   @text("date") date!: string; // YYYY-MM-DD format
   @text("status") status!: OutboxStatus; // pending/syncing/synced
   @date("synced_at") syncedAt?: number;
+  @text("device_id") deviceId!: string;
+  @text("venue_id") venueId!: string;
   @date("created_at") createdAt!: number;
   @date("updated_at") updatedAt!: number;
 

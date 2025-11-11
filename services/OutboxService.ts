@@ -1,4 +1,4 @@
-import database, { eventsCollection, outboxCollection } from "@/db";
+import database, { eventsCollection, outboxesCollection } from "@/db";
 import Event from "@/models/Event";
 import Outbox, { OutboxStatus } from "@/models/Outbox";
 import { Q } from "@nozbe/watermelondb";
@@ -20,7 +20,7 @@ export class OutboxService {
     const todayDate = this.getTodayDate();
 
     // Try to find existing outbox for today
-    const existingOutbox = await outboxCollection
+    const existingOutbox = await outboxesCollection
       .query(Q.where("date", todayDate))
       .fetch();
 
@@ -30,7 +30,7 @@ export class OutboxService {
 
     // Create new outbox for today
     return await database.write(async () => {
-      return await outboxCollection.create((outbox) => {
+      return await outboxesCollection.create((outbox) => {
         outbox.date = todayDate;
         outbox.status = "pending";
       });
@@ -41,7 +41,7 @@ export class OutboxService {
    * Get outbox by date
    */
   static async getOutboxByDate(date: string): Promise<Outbox | null> {
-    const outboxes = await outboxCollection
+    const outboxes = await outboxesCollection
       .query(Q.where("date", date))
       .fetch();
 
@@ -52,14 +52,14 @@ export class OutboxService {
    * Get all outboxes
    */
   static async getAllOutboxes(): Promise<Outbox[]> {
-    return await outboxCollection.query(Q.sortBy("date", Q.desc)).fetch();
+    return await outboxesCollection.query(Q.sortBy("date", Q.desc)).fetch();
   }
 
   /**
    * Get pending outboxes (not yet synced)
    */
   static async getPendingOutboxes(): Promise<Outbox[]> {
-    return await outboxCollection
+    return await outboxesCollection
       .query(Q.where("status", "pending"), Q.sortBy("date", Q.asc))
       .fetch();
   }
@@ -97,7 +97,7 @@ export class OutboxService {
     status: OutboxStatus
   ): Promise<Outbox> {
     return await database.write(async () => {
-      const outbox = await outboxCollection.find(outboxId);
+      const outbox = await outboxesCollection.find(outboxId);
       await outbox.update((o) => {
         o.status = status;
         if (status === "synced") {
@@ -130,7 +130,7 @@ export class OutboxService {
     cutoffDate.setDate(cutoffDate.getDate() - daysOld);
     const cutoffDateStr = cutoffDate.toISOString().split("T")[0];
 
-    return await outboxCollection
+    return await outboxesCollection
       .query(
         Q.where("date", Q.lt(cutoffDateStr)),
         Q.where("status", "synced"),
