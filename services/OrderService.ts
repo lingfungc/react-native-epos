@@ -161,15 +161,16 @@ export class OrderService {
         e.userId = DEFAULT_USER_ID;
         e.venueId = DEFAULT_VENUE_ID;
         e.lamportClock = maxLamportClock + 1;
-        e.status = "pending";
         e.appliedAt = now; // Mark as applied immediately
 
         // Assign either outbox_id or journal_id based on isRelay
-        if (outboxId) {
-          e.outboxId = outboxId;
-        }
-        if (journalId) {
+        if (isRelay) {
           e.journalId = journalId;
+          e.status = "acked";
+          e.ackedAt = now; // Mark as acked immediately
+        } else {
+          e.outboxId = outboxId;
+          e.status = "pending";
         }
       });
 
@@ -228,15 +229,16 @@ export class OrderService {
         e.userId = DEFAULT_USER_ID;
         e.venueId = DEFAULT_VENUE_ID;
         e.lamportClock = maxLamportClock + 1;
-        e.status = "pending";
-        e.appliedAt = now;
+        e.appliedAt = now; // Mark as applied immediately
 
         // Assign either outbox_id or journal_id based on isRelay
-        if (outboxId) {
-          e.outboxId = outboxId;
-        }
-        if (journalId) {
+        if (isRelay) {
           e.journalId = journalId;
+          e.status = "acked";
+          e.ackedAt = now; // Mark as acked immediately
+        } else {
+          e.outboxId = outboxId;
+          e.status = "pending";
         }
       });
 
@@ -301,15 +303,16 @@ export class OrderService {
         e.userId = DEFAULT_USER_ID;
         e.venueId = DEFAULT_VENUE_ID;
         e.lamportClock = maxLamportClock + 1;
-        e.status = "pending";
-        e.appliedAt = now;
+        e.appliedAt = now; // Mark as applied immediately
 
         // Assign either outbox_id or journal_id based on isRelay
-        if (outboxId) {
-          e.outboxId = outboxId;
-        }
-        if (journalId) {
+        if (isRelay) {
           e.journalId = journalId;
+          e.status = "acked";
+          e.ackedAt = now; // Mark as acked immediately
+        } else {
+          e.outboxId = outboxId;
+          e.status = "pending";
         }
       });
 
@@ -404,15 +407,16 @@ export class OrderService {
         e.userId = DEFAULT_USER_ID;
         e.venueId = DEFAULT_VENUE_ID;
         e.lamportClock = maxLamportClock + 1;
-        e.status = "pending";
-        e.appliedAt = now;
+        e.appliedAt = now; // Mark as applied immediately
 
         // Assign either outbox_id or journal_id based on isRelay
-        if (outboxId) {
-          e.outboxId = outboxId;
-        }
-        if (journalId) {
+        if (isRelay) {
           e.journalId = journalId;
+          e.status = "acked";
+          e.ackedAt = now; // Mark as acked immediately
+        } else {
+          e.outboxId = outboxId;
+          e.status = "pending";
         }
       });
 
@@ -485,15 +489,16 @@ export class OrderService {
         e.userId = DEFAULT_USER_ID;
         e.venueId = DEFAULT_VENUE_ID;
         e.lamportClock = maxLamportClock + 1;
-        e.status = "pending";
-        e.appliedAt = now;
+        e.appliedAt = now; // Mark as applied immediately
 
         // Assign either outbox_id or journal_id based on isRelay
-        if (outboxId) {
-          e.outboxId = outboxId;
-        }
-        if (journalId) {
+        if (isRelay) {
           e.journalId = journalId;
+          e.status = "acked";
+          e.ackedAt = now; // Mark as acked immediately
+        } else {
+          e.outboxId = outboxId;
+          e.status = "pending";
         }
       });
 
