@@ -1,10 +1,13 @@
 // services/OrderService.ts
 import { generateRandomOrder } from "@/constants/orders";
-import database, { eventsCollection, ordersCollection } from "@/db";
+import database, {
+  eventsCollection,
+  journalsCollection,
+  ordersCollection,
+  outboxesCollection,
+} from "@/db";
 import Order from "@/models/Order";
 import { Q } from "@nozbe/watermelondb";
-import { JournalService } from "./JournalService";
-import { OutboxService } from "./OutboxService";
 import { isRelay } from "./TcpService";
 
 // Default values for event creation
@@ -14,6 +17,56 @@ const DEFAULT_USER_ID = "user-001";
 const DEFAULT_VENUE_ID = "venue-001";
 
 export class OrderService {
+  /**
+   * Helper: Get or create today's outbox (without database.write wrapper)
+   * This is used WITHIN database.write() calls
+   */
+  private static async getOrCreateTodaysOutboxInternal() {
+    const today = new Date().toISOString().split("T")[0];
+
+    const existingOutbox = await outboxesCollection
+      .query(Q.where("date", today))
+      .fetch();
+
+    if (existingOutbox.length > 0) {
+      return existingOutbox[0];
+    }
+
+    // Create new outbox - we're already in a write transaction
+    return await outboxesCollection.create((outbox) => {
+      outbox.date = today;
+      outbox.status = "pending";
+      outbox.deviceId = DEFAULT_DEVICE_ID;
+      outbox.venueId = DEFAULT_VENUE_ID;
+    });
+  }
+
+  /**
+   * Helper: Get or create today's journal (without database.write wrapper)
+   * This is used WITHIN database.write() calls
+   */
+  private static async getOrCreateTodaysJournalInternal() {
+    const today = new Date().toISOString().split("T")[0];
+
+    const existingJournals = await journalsCollection
+      .query(Q.where("date", today))
+      .fetch();
+
+    if (existingJournals.length > 0) {
+      return existingJournals[0];
+    }
+
+    // Create new journal - we're already in a write transaction
+    return await journalsCollection.create((j) => {
+      j.date = today;
+      j.status = "pending";
+      j.sequence = 0;
+      j.source = "local";
+      j.deviceId = DEFAULT_DEVICE_ID;
+      j.venueId = DEFAULT_VENUE_ID;
+    });
+  }
+
   /**
    * Create a new order with random data
    */
@@ -44,12 +97,10 @@ export class OrderService {
       let journalId: string | undefined;
 
       if (isRelay) {
-        // If relay, assign journal_id only
-        const todaysJournal = await JournalService.getOrCreateTodaysJournal();
+        const todaysJournal = await this.getOrCreateTodaysJournalInternal();
         journalId = todaysJournal.id;
       } else {
-        // If not relay, assign outbox_id only
-        const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+        const todaysOutbox = await this.getOrCreateTodaysOutboxInternal();
         outboxId = todaysOutbox.id;
       }
 
@@ -144,12 +195,10 @@ export class OrderService {
       let journalId: string | undefined;
 
       if (isRelay) {
-        // If relay, assign journal_id only
-        const todaysJournal = await JournalService.getOrCreateTodaysJournal();
+        const todaysJournal = await this.getOrCreateTodaysJournalInternal();
         journalId = todaysJournal.id;
       } else {
-        // If not relay, assign outbox_id only
-        const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+        const todaysOutbox = await this.getOrCreateTodaysOutboxInternal();
         outboxId = todaysOutbox.id;
       }
 
@@ -220,12 +269,10 @@ export class OrderService {
       let journalId: string | undefined;
 
       if (isRelay) {
-        // If relay, assign journal_id only
-        const todaysJournal = await JournalService.getOrCreateTodaysJournal();
+        const todaysJournal = await this.getOrCreateTodaysJournalInternal();
         journalId = todaysJournal.id;
       } else {
-        // If not relay, assign outbox_id only
-        const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+        const todaysOutbox = await this.getOrCreateTodaysOutboxInternal();
         outboxId = todaysOutbox.id;
       }
 
@@ -325,12 +372,10 @@ export class OrderService {
       let journalId: string | undefined;
 
       if (isRelay) {
-        // If relay, assign journal_id only
-        const todaysJournal = await JournalService.getOrCreateTodaysJournal();
+        const todaysJournal = await this.getOrCreateTodaysJournalInternal();
         journalId = todaysJournal.id;
       } else {
-        // If not relay, assign outbox_id only
-        const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+        const todaysOutbox = await this.getOrCreateTodaysOutboxInternal();
         outboxId = todaysOutbox.id;
       }
 
@@ -408,12 +453,10 @@ export class OrderService {
       let journalId: string | undefined;
 
       if (isRelay) {
-        // If relay, assign journal_id only
-        const todaysJournal = await JournalService.getOrCreateTodaysJournal();
+        const todaysJournal = await this.getOrCreateTodaysJournalInternal();
         journalId = todaysJournal.id;
       } else {
-        // If not relay, assign outbox_id only
-        const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+        const todaysOutbox = await this.getOrCreateTodaysOutboxInternal();
         outboxId = todaysOutbox.id;
       }
 
