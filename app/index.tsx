@@ -4,7 +4,14 @@ import { JournalService } from "@/services/JournalService";
 import { OutboxService } from "@/services/OutboxService";
 import { isRelay } from "@/services/TcpService";
 import { useEffect, useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import EventsScreen from "./events";
 import JournalsScreen from "./journals";
 import OrdersScreen from "./orders";
@@ -91,6 +98,22 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
+      {/* Relay Mode Indicator */}
+      <View
+        style={[
+          styles.relayBanner,
+          isRelay ? styles.relayBannerActive : styles.relayBannerInactive,
+        ]}
+      >
+        <Text style={styles.relayBannerText}>
+          {isRelay ? "🔄 RELAY MODE" : "📱 POS MODE"} •{" "}
+          {Platform.OS.toUpperCase()}
+        </Text>
+        <Text style={styles.relayBannerSubtext}>
+          {isRelay ? "Events → Journal (acked)" : "Events → Outbox (pending)"}
+        </Text>
+      </View>
+
       {/* Content */}
       <View style={styles.content}>
         {activeTab === "orders" && <OrdersScreen />}
@@ -217,6 +240,32 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: "#666",
+  },
+  relayBanner: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingTop: 16, // Account for status bar
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  relayBannerActive: {
+    backgroundColor: "#10b981", // Green for relay mode
+  },
+  relayBannerInactive: {
+    backgroundColor: "#3b82f6", // Blue for POS mode
+  },
+  relayBannerText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#ffffff",
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  relayBannerSubtext: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#ffffff",
+    opacity: 0.9,
   },
   content: {
     flex: 1,
