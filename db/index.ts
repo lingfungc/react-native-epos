@@ -2,6 +2,7 @@ import { Database } from "@nozbe/watermelondb";
 import SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 
 import Event from "@/models/Event";
+import Journal from "@/models/Journal";
 import Order from "@/models/Order";
 import Outbox from "@/models/Outbox";
 import migrations from "./migrations";
@@ -26,7 +27,7 @@ const adapter = new SQLiteAdapter({
 // Then, make a Watermelon database from it!
 const database = new Database({
   adapter,
-  modelClasses: [Event, Order, Outbox],
+  modelClasses: [Event, Order, Outbox, Journal],
 });
 
 export default database;
@@ -34,3 +35,4 @@ export default database;
 export const eventsCollection = database.get<Event>("events");
 export const ordersCollection = database.get<Order>("orders");
 export const outboxesCollection = database.get<Outbox>("outboxes");
+export const journalsCollection = database.get<Journal>("journals");

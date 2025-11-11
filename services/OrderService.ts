@@ -3,7 +3,9 @@ import { generateRandomOrder } from "@/constants/orders";
 import database, { eventsCollection, ordersCollection } from "@/db";
 import Order from "@/models/Order";
 import { Q } from "@nozbe/watermelondb";
+import { JournalService } from "./JournalService";
 import { OutboxService } from "./OutboxService";
+import { isRelay } from "./TcpService";
 
 // Default values for event creation
 const DEFAULT_DEVICE_ID = "device-001";
@@ -38,7 +40,18 @@ export class OrderService {
     return await database.write(async () => {
       const now = Date.now();
 
-      const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+      let outboxId: string | undefined;
+      let journalId: string | undefined;
+
+      if (isRelay) {
+        // If relay, assign journal_id only
+        const todaysJournal = await JournalService.getOrCreateTodaysJournal();
+        journalId = todaysJournal.id;
+      } else {
+        // If not relay, assign outbox_id only
+        const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+        outboxId = todaysOutbox.id;
+      }
 
       // Parse items first
       let items: any[] = [];
@@ -50,7 +63,7 @@ export class OrderService {
 
       // Step 1: Get the current max sequence and lamport clock for event
       const existingEvents = await eventsCollection
-        .query(Q.sortBy("sequence", Q.desc))
+        .query(Q.sortBy("sequence", Q.desc), Q.take(1))
         .fetch();
 
       const maxSequence =
@@ -99,7 +112,14 @@ export class OrderService {
         e.lamportClock = maxLamportClock + 1;
         e.status = "pending";
         e.appliedAt = now; // Mark as applied immediately
-        e.outboxId = todaysOutbox.id;
+
+        // Assign either outbox_id or journal_id based on isRelay
+        if (outboxId) {
+          e.outboxId = outboxId;
+        }
+        if (journalId) {
+          e.journalId = journalId;
+        }
       });
 
       // Step 4: Update the order with event reference
@@ -120,7 +140,18 @@ export class OrderService {
       const order = await ordersCollection.find(orderId);
       const now = Date.now();
 
-      const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+      let outboxId: string | undefined;
+      let journalId: string | undefined;
+
+      if (isRelay) {
+        // If relay, assign journal_id only
+        const todaysJournal = await JournalService.getOrCreateTodaysJournal();
+        journalId = todaysJournal.id;
+      } else {
+        // If not relay, assign outbox_id only
+        const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+        outboxId = todaysOutbox.id;
+      }
 
       // Get current max sequence and lamport clock
       const existingEvents = await eventsCollection
@@ -150,7 +181,14 @@ export class OrderService {
         e.lamportClock = maxLamportClock + 1;
         e.status = "pending";
         e.appliedAt = now;
-        e.outboxId = todaysOutbox.id;
+
+        // Assign either outbox_id or journal_id based on isRelay
+        if (outboxId) {
+          e.outboxId = outboxId;
+        }
+        if (journalId) {
+          e.journalId = journalId;
+        }
       });
 
       await order.update((o) => {
@@ -178,7 +216,18 @@ export class OrderService {
       const order = await ordersCollection.find(orderId);
       const now = Date.now();
 
-      const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+      let outboxId: string | undefined;
+      let journalId: string | undefined;
+
+      if (isRelay) {
+        // If relay, assign journal_id only
+        const todaysJournal = await JournalService.getOrCreateTodaysJournal();
+        journalId = todaysJournal.id;
+      } else {
+        // If not relay, assign outbox_id only
+        const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+        outboxId = todaysOutbox.id;
+      }
 
       // Get current max sequence and lamport clock
       const existingEvents = await eventsCollection
@@ -207,7 +256,14 @@ export class OrderService {
         e.lamportClock = maxLamportClock + 1;
         e.status = "pending";
         e.appliedAt = now;
-        e.outboxId = todaysOutbox.id;
+
+        // Assign either outbox_id or journal_id based on isRelay
+        if (outboxId) {
+          e.outboxId = outboxId;
+        }
+        if (journalId) {
+          e.journalId = journalId;
+        }
       });
 
       await order.update((o) => {
@@ -265,7 +321,18 @@ export class OrderService {
       const order = await ordersCollection.find(orderId);
       const now = Date.now();
 
-      const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+      let outboxId: string | undefined;
+      let journalId: string | undefined;
+
+      if (isRelay) {
+        // If relay, assign journal_id only
+        const todaysJournal = await JournalService.getOrCreateTodaysJournal();
+        journalId = todaysJournal.id;
+      } else {
+        // If not relay, assign outbox_id only
+        const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+        outboxId = todaysOutbox.id;
+      }
 
       // Get current max sequence and lamport clock
       const existingEvents = await eventsCollection
@@ -294,7 +361,14 @@ export class OrderService {
         e.lamportClock = maxLamportClock + 1;
         e.status = "pending";
         e.appliedAt = now;
-        e.outboxId = todaysOutbox.id;
+
+        // Assign either outbox_id or journal_id based on isRelay
+        if (outboxId) {
+          e.outboxId = outboxId;
+        }
+        if (journalId) {
+          e.journalId = journalId;
+        }
       });
 
       // Recalculate totals
@@ -330,7 +404,18 @@ export class OrderService {
       const order = await ordersCollection.find(orderId);
       const now = Date.now();
 
-      const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+      let outboxId: string | undefined;
+      let journalId: string | undefined;
+
+      if (isRelay) {
+        // If relay, assign journal_id only
+        const todaysJournal = await JournalService.getOrCreateTodaysJournal();
+        journalId = todaysJournal.id;
+      } else {
+        // If not relay, assign outbox_id only
+        const todaysOutbox = await OutboxService.getOrCreateTodaysOutbox();
+        outboxId = todaysOutbox.id;
+      }
 
       // Get current max sequence and lamport clock
       const existingEvents = await eventsCollection
@@ -359,7 +444,14 @@ export class OrderService {
         e.lamportClock = maxLamportClock + 1;
         e.status = "pending";
         e.appliedAt = now;
-        e.outboxId = todaysOutbox.id;
+
+        // Assign either outbox_id or journal_id based on isRelay
+        if (outboxId) {
+          e.outboxId = outboxId;
+        }
+        if (journalId) {
+          e.journalId = journalId;
+        }
       });
 
       await order.update((o) => {

@@ -62,7 +62,7 @@ export default class Event extends Model {
   @date("acked_at") ackedAt?: number;
 
   // Foreign key to outbox
-  @text("outbox_id") outboxId!: string;
+  @text("outbox_id") outboxId?: string;
 
   // Relation to get the parent outbox
   @relation("outbox", "outbox_id") outbox!: Relation<Outbox>;

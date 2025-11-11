@@ -22,8 +22,18 @@ export default appSchema({
         { name: "status", type: "string" },
         { name: "error_message", type: "string", isOptional: true },
         { name: "acked_at", type: "number", isOptional: true },
-        { name: "outbox_id", type: "string", isIndexed: true },
-        { name: "journal_id", type: "string", isIndexed: true },
+        {
+          name: "outbox_id",
+          type: "string",
+          isIndexed: true,
+          isOptional: true,
+        },
+        {
+          name: "journal_id",
+          type: "string",
+          isIndexed: true,
+          isOptional: true,
+        },
       ],
     }),
     tableSchema({

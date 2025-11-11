@@ -22,7 +22,7 @@ export class EventService {
 
       // Get the current max sequence and lamport clock
       const existingEvents = await eventsCollection
-        .query(Q.sortBy("sequence", Q.desc))
+        .query(Q.sortBy("sequence", Q.desc), Q.take(1))
         .fetch();
 
       const maxSequence =

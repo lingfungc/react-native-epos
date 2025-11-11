@@ -43,7 +43,7 @@ export default function EventsScreen() {
     try {
       // Get the current max sequence to increment it
       const existingEvents = await eventsCollection
-        .query(Q.sortBy("sequence", Q.desc))
+        .query(Q.sortBy("sequence", Q.desc), Q.take(1))
         .fetch();
       const maxSequence =
         existingEvents.length > 0 ? existingEvents[0].sequence : 0;
