@@ -1,27 +1,29 @@
 import { DatabaseService } from "@/services/DatabaseService";
+import { JournalService } from "@/services/JournalService";
 import { OutboxService } from "@/services/OutboxService";
+import { isRelay } from "@/services/TcpService";
 import { useEffect, useState } from "react";
-import {
-  Alert,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import EventsScreen from "./events";
+import JournalsScreen from "./journals";
 import OrdersScreen from "./orders";
 import OutboxScreen from "./outboxes";
 
-type Tab = "orders" | "events" | "outbox";
+type Tab = "orders" | "events" | "outbox" | "journals";
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<Tab>("orders");
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    // Initialize today's outbox when app opens
-    const initializeOutbox = async () => {
+    // Initialize today's outbox and journal when app opens
+    const initializeTcpConnection = async () => {
       try {
+        if (isRelay) {
+          const journal = await JournalService.getOrCreateTodaysJournal();
+          console.log("✅ Today's journal initialized:", journal.date);
+        }
+
         const outbox = await OutboxService.getOrCreateTodaysOutbox();
         console.log("✅ Today's outbox initialized:", outbox.date);
         setIsInitialized(true);
@@ -31,13 +33,13 @@ export default function Index() {
       }
     };
 
-    initializeOutbox();
+    initializeTcpConnection();
   }, []);
 
   const handleResetDatabase = () => {
     Alert.alert(
       "Reset Database",
-      "Are you sure you want to delete all data? This will remove all orders, events, and outboxes. This action cannot be undone.",
+      "Are you sure you want to delete all data? This will remove all orders, events, outboxes, and journals. This action cannot be undone.",
       [
         {
           text: "Cancel",
@@ -49,6 +51,10 @@ export default function Index() {
           onPress: async () => {
             try {
               await DatabaseService.resetDatabase();
+              // Reinitialize today's journal after reset
+              if (isRelay) {
+                await JournalService.getOrCreateTodaysJournal();
+              }
               // Reinitialize today's outbox after reset
               await OutboxService.getOrCreateTodaysOutbox();
               Alert.alert("Success", "Database has been reset successfully.");
@@ -81,6 +87,7 @@ export default function Index() {
         {activeTab === "orders" && <OrdersScreen />}
         {activeTab === "events" && <EventsScreen />}
         {activeTab === "outbox" && <OutboxScreen />}
+        {activeTab === "journals" && <JournalsScreen />}
       </View>
 
       {/* Bottom Navigation */}
@@ -148,6 +155,28 @@ export default function Index() {
             ]}
           >
             Outbox
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => setActiveTab("journals")}
+        >
+          <View
+            style={[
+              styles.iconContainer,
+              activeTab === "journals" && styles.iconContainerActive,
+            ]}
+          >
+            <Text style={styles.icon}>📔</Text>
+          </View>
+          <Text
+            style={[
+              styles.navText,
+              activeTab === "journals" && styles.navTextActive,
+            ]}
+          >
+            Journals
           </Text>
         </TouchableOpacity>
 

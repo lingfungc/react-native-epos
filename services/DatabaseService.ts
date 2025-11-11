@@ -1,5 +1,6 @@
 import database, {
   eventsCollection,
+  journalsCollection,
   ordersCollection,
   outboxesCollection,
 } from "@/db";
@@ -7,7 +8,7 @@ import database, {
 export class DatabaseService {
   /**
    * Reset the database by deleting all records from all tables
-   * This will remove all orders, events, and outboxes
+   * This will remove all orders, events, outboxes, and journals
    */
   static async resetDatabase(): Promise<void> {
     await database.write(async () => {
@@ -28,6 +29,12 @@ export class DatabaseService {
       await Promise.all(
         allOutboxes.map((outbox) => outbox.destroyPermanently())
       );
+
+      // Delete all journals
+      const allJournals = await journalsCollection.query().fetch();
+      await Promise.all(
+        allJournals.map((journal) => journal.destroyPermanently())
+      );
     });
   }
 
@@ -38,15 +45,18 @@ export class DatabaseService {
     ordersCount: number;
     eventsCount: number;
     outboxesCount: number;
+    journalsCount: number;
   }> {
     const orders = await ordersCollection.query().fetch();
     const events = await eventsCollection.query().fetch();
     const outboxes = await outboxesCollection.query().fetch();
+    const journals = await journalsCollection.query().fetch();
 
     return {
       ordersCount: orders.length,
       eventsCount: events.length,
       outboxesCount: outboxes.length,
+      journalsCount: journals.length,
     };
   }
 }
