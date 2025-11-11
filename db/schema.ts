@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from "@nozbe/watermelondb";
 
 export default appSchema({
-  version: 6,
+  version: 7,
   tables: [
     tableSchema({
       name: "events",
@@ -23,6 +23,7 @@ export default appSchema({
         { name: "error_message", type: "string", isOptional: true },
         { name: "acked_at", type: "number", isOptional: true },
         { name: "outbox_id", type: "string", isIndexed: true },
+        { name: "journal_id", type: "string", isIndexed: true },
       ],
     }),
     tableSchema({
@@ -57,6 +58,20 @@ export default appSchema({
       columns: [
         { name: "date", type: "string", isIndexed: true },
         { name: "status", type: "string", isIndexed: true },
+        { name: "device_id", type: "string" },
+        { name: "venue_id", type: "string" },
+        { name: "synced_at", type: "number", isOptional: true },
+        { name: "created_at", type: "number" },
+        { name: "updated_at", type: "number" },
+      ],
+    }),
+    tableSchema({
+      name: "journals",
+      columns: [
+        { name: "date", type: "string", isIndexed: true },
+        { name: "status", type: "string", isIndexed: true },
+        { name: "sequence", type: "number" },
+        { name: "source", type: "string" },
         { name: "device_id", type: "string" },
         { name: "venue_id", type: "string" },
         { name: "synced_at", type: "number", isOptional: true },

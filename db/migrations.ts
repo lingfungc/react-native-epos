@@ -108,5 +108,28 @@ export default schemaMigrations({
         }),
       ],
     },
+    {
+      toVersion: 7,
+      steps: [
+        addColumns({
+          table: "events",
+          columns: [{ name: "journal_id", type: "string", isIndexed: true }],
+        }),
+        createTable({
+          name: "journals",
+          columns: [
+            { name: "date", type: "string", isIndexed: true },
+            { name: "status", type: "string", isIndexed: true },
+            { name: "sequence", type: "number" },
+            { name: "source", type: "string" },
+            { name: "device_id", type: "string" },
+            { name: "venue_id", type: "string" },
+            { name: "synced_at", type: "number", isOptional: true },
+            { name: "created_at", type: "number" },
+            { name: "updated_at", type: "number" },
+          ],
+        }),
+      ],
+    },
   ],
 });

@@ -6,6 +6,7 @@ import {
   relation,
   text,
 } from "@nozbe/watermelondb/decorators";
+import Journal from "./Journal";
 import Outbox from "./Outbox";
 
 export type EntityType =
@@ -37,9 +38,10 @@ export type EventStatus = "pending" | "acked" | "rejected";
 export default class Event extends Model {
   static table = "events";
 
-  // Define the relationship: event belongs to an outbox
+  // Define the relationship: event belongs to an outbox and a journal
   static associations = {
     outbox: { type: "belongs_to", key: "outbox_id" },
+    journal: { type: "belongs_to", key: "journal_id" },
   } as const;
 
   @field("sequence") sequence!: number;
@@ -64,4 +66,10 @@ export default class Event extends Model {
 
   // Relation to get the parent outbox
   @relation("outbox", "outbox_id") outbox!: Relation<Outbox>;
+
+  // Foreign key to journal
+  @text("journal_id") journalId?: string;
+
+  // Relation to get the parent journal
+  @relation("journal", "journal_id") journal!: Relation<Journal>;
 }
