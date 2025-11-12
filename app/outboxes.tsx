@@ -1,4 +1,4 @@
-import { outboxesCollection } from "@/db";
+import { eventsCollection, outboxesCollection } from "@/db";
 import Event from "@/models/Event";
 import type { OutboxStatus } from "@/models/Outbox";
 import Outbox from "@/models/Outbox";
@@ -43,7 +43,14 @@ export default function OutboxScreen() {
         // For each outbox, fetch its related events
         const outboxesWithEvents = await Promise.all(
           outboxesData.map(async (outbox) => {
-            const events = await outbox.events.fetch();
+            // Explicitly query events that belong to this outbox
+            const events = await eventsCollection
+              .query(
+                Q.where("outbox_id", outbox.id),
+                Q.sortBy("sequence", Q.asc)
+              )
+              .fetch();
+
             return {
               outbox: outbox,
               events: events,
@@ -56,7 +63,9 @@ export default function OutboxScreen() {
           "Events per outbox:",
           outboxesWithEvents.map((o) => ({
             date: o.outbox.date,
+            outboxId: o.outbox.id,
             eventCount: o.events.length,
+            eventIds: o.events.map((e) => e.id),
           }))
         );
 
@@ -73,19 +82,30 @@ export default function OutboxScreen() {
     // Initial load
     loadOutboxes();
 
-    // Subscribe to changes
-    const subscription = outboxesCollection
+    // Subscribe to changes in both outboxes and events
+    const outboxSubscription = outboxesCollection
       .query(Q.sortBy("date", Q.desc))
       .observe()
       .subscribe(() => {
         loadOutboxes();
       });
 
-    return () => subscription.unsubscribe();
+    const eventsSubscription = eventsCollection
+      .query()
+      .observe()
+      .subscribe(() => {
+        loadOutboxes();
+      });
+
+    return () => {
+      outboxSubscription.unsubscribe();
+      eventsSubscription.unsubscribe();
+    };
   }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
+
     // Reload outboxes
     const outboxesData = await outboxesCollection
       .query(Q.sortBy("date", Q.desc))
@@ -93,7 +113,11 @@ export default function OutboxScreen() {
 
     const outboxesWithEvents = await Promise.all(
       outboxesData.map(async (outbox) => {
-        const events = await outbox.events.fetch();
+        // Explicitly query events that belong to this outbox
+        const events = await eventsCollection
+          .query(Q.where("outbox_id", outbox.id), Q.sortBy("sequence", Q.asc))
+          .fetch();
+
         return {
           outbox: outbox,
           events: events,

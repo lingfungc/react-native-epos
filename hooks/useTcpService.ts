@@ -1,10 +1,12 @@
+import { RelayService } from "@/services/RelayService";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DeviceService } from "../services/DeviceService";
-import type {
-  TcpConnectionInfo,
-  TcpMessage,
-  TcpRole,
-  TcpServiceDelegate,
+import {
+  isRelay,
+  type TcpConnectionInfo,
+  type TcpMessage,
+  type TcpRole,
+  type TcpServiceDelegate,
 } from "../services/TcpService";
 import { getTcpService } from "../services/TcpServiceSingleton";
 
@@ -85,13 +87,45 @@ export function useTcpService(): UseTcpServiceResult {
         setConnectedClients([]);
         setConnectedClientsInfo(new Map());
       },
-      onMessageReceived: (message) => {
+      onMessageReceived: async (message) => {
         console.log("📨 Message received:", message.type, message.data);
         setMessages((prev) => [...prev, message]);
 
         // Update connected clients list if it's in the message
         if (message.data?.connectedClients) {
           setConnectedClients(message.data.connectedClients);
+        }
+
+        // Handle sync messages when in relay mode
+        if (isRelay && message.type === "sync" && message.data) {
+          console.log("🔄 [Relay Mode] Processing sync event...");
+          try {
+            await RelayService.onEventReceived(
+              message.data,
+              message.deviceId,
+              message.userId,
+              message.venueId
+            );
+
+            // Send acknowledgment back to client
+            const ackMessage = RelayService.createAckMessage(
+              message.data.eventId,
+              true
+            );
+            tcpService.sendMessage(ackMessage);
+
+            console.log("✅ [Relay Mode] Event processed and ack sent");
+          } catch (error) {
+            console.error("❌ [Relay Mode] Error processing event:", error);
+
+            // Send error acknowledgment
+            const ackMessage = RelayService.createAckMessage(
+              message.data.eventId,
+              false,
+              (error as Error).message
+            );
+            tcpService.sendMessage(ackMessage);
+          }
         }
       },
       onClientConnected: (clientId, clientInfo) => {

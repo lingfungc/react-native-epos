@@ -1,6 +1,6 @@
-import { journalsCollection } from "@/db";
+import { eventsCollection, journalsCollection } from "@/db";
 import Event from "@/models/Event";
-import type { JournalStatus, JournalSource } from "@/models/Journal";
+import type { JournalSource, JournalStatus } from "@/models/Journal";
 import Journal from "@/models/Journal";
 import { Q } from "@nozbe/watermelondb";
 import React, { useEffect, useState } from "react";
@@ -35,7 +35,14 @@ export default function JournalsScreen() {
         // For each journal, fetch its related events
         const journalsWithEvents = await Promise.all(
           journalsData.map(async (journal) => {
-            const events = await journal.events.fetch();
+            // Explicitly query events that belong to this journal
+            const events = await eventsCollection
+              .query(
+                Q.where("journal_id", journal.id),
+                Q.sortBy("sequence", Q.asc)
+              )
+              .fetch();
+
             return {
               journal: journal,
               events: events,
@@ -48,7 +55,9 @@ export default function JournalsScreen() {
           "Events per journal:",
           journalsWithEvents.map((j) => ({
             date: j.journal.date,
+            journalId: j.journal.id,
             eventCount: j.events.length,
+            eventIds: j.events.map((e) => e.id),
           }))
         );
 
@@ -65,19 +74,30 @@ export default function JournalsScreen() {
     // Initial load
     loadJournals();
 
-    // Subscribe to changes
-    const subscription = journalsCollection
+    // Subscribe to changes in both journals and events
+    const journalSubscription = journalsCollection
       .query(Q.sortBy("date", Q.desc))
       .observe()
       .subscribe(() => {
         loadJournals();
       });
 
-    return () => subscription.unsubscribe();
+    const eventsSubscription = eventsCollection
+      .query()
+      .observe()
+      .subscribe(() => {
+        loadJournals();
+      });
+
+    return () => {
+      journalSubscription.unsubscribe();
+      eventsSubscription.unsubscribe();
+    };
   }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
+
     // Reload journals
     const journalsData = await journalsCollection
       .query(Q.sortBy("date", Q.desc))
@@ -85,7 +105,11 @@ export default function JournalsScreen() {
 
     const journalsWithEvents = await Promise.all(
       journalsData.map(async (journal) => {
-        const events = await journal.events.fetch();
+        // Explicitly query events that belong to this journal
+        const events = await eventsCollection
+          .query(Q.where("journal_id", journal.id), Q.sortBy("sequence", Q.asc))
+          .fetch();
+
         return {
           journal: journal,
           events: events,
