@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DeviceService } from "../services/DeviceService";
-import TcpService, {
+import type {
   TcpConnectionInfo,
   TcpMessage,
   TcpRole,
   TcpServiceDelegate,
 } from "../services/TcpService";
+import { getTcpService } from "../services/TcpServiceSingleton";
 
 export interface UseTcpServiceResult {
   role: TcpRole;
@@ -28,7 +29,7 @@ export interface UseTcpServiceResult {
 }
 
 export function useTcpService(): UseTcpServiceResult {
-  const tcpServiceRef = useRef<TcpService | null>(null);
+  const tcpService = getTcpService();
   const [role, setRole] = useState<TcpRole>("none");
   const [deviceId, setDeviceId] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
@@ -45,134 +46,150 @@ export function useTcpService(): UseTcpServiceResult {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Initialize TCP service
+  // Use refs to maintain callbacks across renders
+  const delegateRef = useRef<TcpServiceDelegate>({});
+
+  // Initialize device info once
   useEffect(() => {
-    if (!tcpServiceRef.current) {
-      const service = new TcpService();
-      tcpServiceRef.current = service;
+    try {
+      setDeviceId(DeviceService.getDeviceId());
+      setUserId(DeviceService.getUserId());
+      setVenueId(DeviceService.getVenueId());
+    } catch (error) {
+      console.error(
+        "DeviceService not initialized. Make sure to call DeviceService.initialize() in your app startup."
+      );
+      console.error("DeviceService error: ", error);
+    }
 
-      // Get device identifiers from DeviceService
-      try {
-        setDeviceId(DeviceService.getDeviceId());
-        setUserId(DeviceService.getUserId());
-        setVenueId(DeviceService.getVenueId());
-      } catch (error) {
-        console.error(
-          "DeviceService not initialized. Make sure to call DeviceService.initialize() in your app startup."
-        );
-        console.error("DeviceService error: ", error);
-      }
+    // Sync initial state from service
+    setRole(tcpService.getRole());
+    setIsConnected(tcpService.getRole() !== "none");
+  }, [tcpService]);
 
-      const delegate: TcpServiceDelegate = {
-        onConnectionEstablished: (info) => {
-          setConnectionInfo(info);
-          setIsConnected(true);
-          setError(null);
-        },
-        onConnectionClosed: () => {
-          setIsConnected(false);
-          setConnectionInfo(null);
-          setRole("none");
-          setConnectedClients([]);
-          setConnectedClientsInfo(new Map());
-        },
-        onMessageReceived: (message) => {
-          setMessages((prev) => [...prev, message]);
+  // Set up persistent delegate
+  useEffect(() => {
+    delegateRef.current = {
+      onConnectionEstablished: (info) => {
+        console.log("📡 Connection established:", info);
+        setConnectionInfo(info);
+        setIsConnected(true);
+        setError(null);
+        setRole(tcpService.getRole());
+      },
+      onConnectionClosed: () => {
+        console.log("📡 Connection closed");
+        setIsConnected(false);
+        setConnectionInfo(null);
+        setRole("none");
+        setConnectedClients([]);
+        setConnectedClientsInfo(new Map());
+      },
+      onMessageReceived: (message) => {
+        console.log("📨 Message received:", message.type, message.data);
+        setMessages((prev) => [...prev, message]);
 
-          // Update connected clients list if it's in the message
-          if (message.data?.connectedClients) {
-            setConnectedClients(message.data.connectedClients);
-          }
-        },
-        onClientConnected: (clientId, clientInfo) => {
-          setConnectedClients((prev) => [...prev, clientId]);
-          if (clientInfo) {
-            setConnectedClientsInfo((prev) => {
-              const newMap = new Map(prev);
-              newMap.set(clientId, clientInfo);
-              return newMap;
-            });
-          }
-        },
-        onClientDisconnected: (clientId) => {
-          setConnectedClients((prev) => prev.filter((id) => id !== clientId));
+        // Update connected clients list if it's in the message
+        if (message.data?.connectedClients) {
+          setConnectedClients(message.data.connectedClients);
+        }
+      },
+      onClientConnected: (clientId, clientInfo) => {
+        console.log("👤 Client connected:", clientId);
+        setConnectedClients((prev) => [...prev, clientId]);
+        if (clientInfo) {
           setConnectedClientsInfo((prev) => {
             const newMap = new Map(prev);
-            newMap.delete(clientId);
+            newMap.set(clientId, clientInfo);
             return newMap;
           });
-        },
-        onError: (err) => {
-          setError(err);
-          setIsConnected(false);
-        },
-      };
-
-      service.setDelegate(delegate);
-    }
-
-    return () => {
-      if (tcpServiceRef.current) {
-        tcpServiceRef.current.stop();
-      }
+        }
+      },
+      onClientDisconnected: (clientId) => {
+        console.log("👤 Client disconnected:", clientId);
+        setConnectedClients((prev) => prev.filter((id) => id !== clientId));
+        setConnectedClientsInfo((prev) => {
+          const newMap = new Map(prev);
+          newMap.delete(clientId);
+          return newMap;
+        });
+      },
+      onError: (err) => {
+        console.error("❌ TCP Error:", err);
+        setError(err);
+        setIsConnected(false);
+      },
     };
-  }, []);
 
-  const startServer = useCallback(async (port: number = 8080) => {
-    try {
-      setError(null);
-      if (tcpServiceRef.current) {
-        await tcpServiceRef.current.startServer(port);
+    // Set the persistent delegate
+    tcpService.setDelegate(delegateRef.current);
+
+    // DON'T clear delegate on unmount - keep it persistent
+    return () => {
+      console.log("🔄 Component unmounting, keeping delegate active");
+      // Do nothing - delegate stays active
+    };
+  }, [tcpService]);
+
+  const startServer = useCallback(
+    async (port: number = 8080) => {
+      try {
+        setError(null);
+        await tcpService.startServer(port);
         setRole("server");
+      } catch (err) {
+        setError(err as Error);
+        throw err;
       }
-    } catch (err) {
-      setError(err as Error);
-      throw err;
-    }
-  }, []);
+    },
+    [tcpService]
+  );
 
-  const connectToServer = useCallback(async (host: string, port: number) => {
-    try {
-      setError(null);
-      if (tcpServiceRef.current) {
-        await tcpServiceRef.current.connectToServer(host, port);
+  const connectToServer = useCallback(
+    async (host: string, port: number) => {
+      try {
+        setError(null);
+        await tcpService.connectToServer(host, port);
         setRole("client");
+      } catch (err) {
+        setError(err as Error);
+        throw err;
       }
-    } catch (err) {
-      setError(err as Error);
-      throw err;
-    }
-  }, []);
+    },
+    [tcpService]
+  );
 
   const sendMessage = useCallback(
     (
       message: Omit<TcpMessage, "deviceId" | "userId" | "venueId" | "timestamp">
     ) => {
-      if (tcpServiceRef.current && isConnected) {
-        tcpServiceRef.current.sendMessage(message);
+      if (isConnected || tcpService.getRole() !== "none") {
+        console.log("📤 Sending message:", message.type, message.data);
+        tcpService.sendMessage(message);
+      } else {
+        console.warn("⚠️ Cannot send message: not connected");
       }
     },
-    [isConnected]
+    [tcpService, isConnected]
   );
 
   const disconnect = useCallback(() => {
-    if (tcpServiceRef.current) {
-      tcpServiceRef.current.stop();
-      setRole("none");
-      setIsConnected(false);
-      setConnectionInfo(null);
-      setConnectedClients([]);
-      setConnectedClientsInfo(new Map());
-      setMessages([]);
-      setError(null);
-    }
-  }, []);
+    tcpService.stop();
+    setRole("none");
+    setIsConnected(false);
+    setConnectionInfo(null);
+    setConnectedClients([]);
+    setConnectedClientsInfo(new Map());
+    setMessages([]);
+    setError(null);
+  }, [tcpService]);
 
-  const getClientInfo = useCallback((clientId: string):
-    | Partial<TcpConnectionInfo>
-    | undefined => {
-    return tcpServiceRef.current?.getClientInfo(clientId);
-  }, []);
+  const getClientInfo = useCallback(
+    (clientId: string): Partial<TcpConnectionInfo> | undefined => {
+      return tcpService.getClientInfo(clientId);
+    },
+    [tcpService]
+  );
 
   return {
     role,

@@ -65,6 +65,13 @@ class TcpService {
     this.delegate = delegate;
   }
 
+  public updateDelegate(delegate: Partial<TcpServiceDelegate>) {
+    this.delegate = {
+      ...this.delegate,
+      ...delegate,
+    };
+  }
+
   public getDeviceId(): string {
     return DeviceService.getDeviceId();
   }
