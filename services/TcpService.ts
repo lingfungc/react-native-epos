@@ -2,6 +2,7 @@ import * as Device from "expo-device";
 import TcpSocket from "react-native-tcp-socket";
 
 import { DeviceService } from "./DeviceService";
+import { NetworkInfoService } from "./NetworkInfoService";
 
 /**
  * Determine if this device is a relay based on Device Operating System
@@ -96,13 +97,15 @@ class TcpService {
 
   // Start as server (relay)
   public startServer(port: number = 8080): Promise<TcpConnectionInfo> {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       if (this.role !== "none") {
         reject(new Error(`Already running as ${this.role}`));
         return;
       }
 
       try {
+        const localIp = await NetworkInfoService.getLocalIpAddress();
+
         this.server = TcpSocket.createServer((socket) => {
           this.handleClientConnection(socket);
         });
@@ -112,7 +115,7 @@ class TcpService {
           const address = this.server.address();
 
           const info: TcpConnectionInfo = {
-            address: this.getLocalIpAddress(address),
+            address: localIp || "0.0.0.0",
             port: address.port,
             deviceId: DeviceService.getDeviceId(),
             userId: DeviceService.getUserId(),

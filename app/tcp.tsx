@@ -184,23 +184,19 @@ export default function TcpConnectionScreen() {
         <Text style={styles.statusLabel}>Venue ID</Text>
         <Text style={styles.statusValueSmall}>{venueId}</Text>
 
-        {connectionInfo && (
-          <>
-            <Text style={styles.statusLabel}>Connection</Text>
-            <Text style={styles.statusValue}>
-              {formatConnectionString(
-                connectionInfo.address,
-                connectionInfo.port
-              )}
+        {role === "server" && connectionInfo && (
+          <View style={styles.connectionInfoCard}>
+            <Text style={styles.connectionInfoTitle}>
+              📱 Share this with other devices:
             </Text>
-          </>
-        )}
-
-        {role === "server" && (
-          <>
-            <Text style={styles.statusLabel}>Connected Clients</Text>
-            <Text style={styles.statusValue}>{connectedClients.length}</Text>
-          </>
+            <View style={styles.ipDisplay}>
+              <Text style={styles.ipAddress}>{connectionInfo.address}</Text>
+              <Text style={styles.portDisplay}>:{connectionInfo.port}</Text>
+            </View>
+            <Text style={styles.connectionInfoHint}>
+              Other devices should enter this IP address to connect
+            </Text>
+          </View>
         )}
 
         <TouchableOpacity
@@ -499,5 +495,45 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#856404",
     fontSize: 14,
+  },
+  connectionInfoCard: {
+    backgroundColor: "#E3F2FD",
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: "#2196F3",
+  },
+  connectionInfoTitle: {
+    fontSize: 14,
+    color: "#1976D2",
+    fontWeight: "600",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  ipDisplay: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "baseline",
+    marginBottom: 8,
+  },
+  ipAddress: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: "#1565C0",
+    fontFamily: "monospace",
+  },
+  portDisplay: {
+    fontSize: 24,
+    fontWeight: "600",
+    color: "#1976D2",
+    fontFamily: "monospace",
+  },
+  connectionInfoHint: {
+    fontSize: 12,
+    color: "#1976D2",
+    textAlign: "center",
+    fontStyle: "italic",
   },
 });
