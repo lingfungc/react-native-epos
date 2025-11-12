@@ -6,13 +6,16 @@ import { Q } from "@nozbe/watermelondb";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
+import { useTcpService } from "../hooks/useTcpService";
 
 type OutboxWithEvents = {
   outbox: Outbox;
@@ -23,6 +26,11 @@ export default function OutboxScreen() {
   const [outboxes, setOutboxes] = useState<OutboxWithEvents[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sendingEventIds, setSendingEventIds] = useState<Set<string>>(
+    new Set()
+  );
+
+  const { isConnected, role, sendMessage } = useTcpService();
 
   useEffect(() => {
     const loadOutboxes = async () => {
@@ -97,6 +105,66 @@ export default function OutboxScreen() {
     setRefreshing(false);
   };
 
+  const handleSendEvent = async (event: Event) => {
+    if (!isConnected) {
+      Alert.alert(
+        "Not Connected",
+        "Please connect to the relay server first via the TCP tab."
+      );
+      return;
+    }
+
+    if (role !== "client") {
+      Alert.alert(
+        "Invalid Role",
+        "Only clients can send events to the relay. Current role: " + role
+      );
+      return;
+    }
+
+    try {
+      setSendingEventIds((prev) => new Set(prev).add(event.id));
+
+      // Parse the payload
+      let payload: any = null;
+      try {
+        payload = JSON.parse(event.payloadJson);
+      } catch (e) {
+        console.error("Failed to parse event payload:", e);
+      }
+
+      // Send the event via TCP
+      sendMessage({
+        type: "sync",
+        data: {
+          eventId: event.id,
+          sequence: event.sequence,
+          entity: event.entity,
+          entityId: event.entityId,
+          eventType: event.type,
+          payload: payload,
+          lamportClock: event.lamportClock,
+          status: event.status,
+          outboxId: event.outboxId,
+          createdAt: event.createdAt,
+        },
+      });
+
+      console.log("📤 Event sent to relay:", event.id);
+
+      Alert.alert("Success", "Event sent to relay successfully!");
+    } catch (error) {
+      console.error("Error sending event:", error);
+      Alert.alert("Error", `Failed to send event: ${(error as Error).message}`);
+    } finally {
+      setSendingEventIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(event.id);
+        return newSet;
+      });
+    }
+  };
+
   const formatDate = (timestamp: number | undefined): string => {
     if (!timestamp) return "N/A";
     return new Date(timestamp).toLocaleString();
@@ -137,26 +205,48 @@ export default function OutboxScreen() {
       // Invalid JSON, ignore
     }
 
+    const isSending = sendingEventIds.has(event.id);
+    const isPending = event.status === "pending";
+
     return (
       <View key={event.id} style={styles.eventItem}>
         <View style={styles.eventHeader}>
           <Text style={styles.eventType}>{event.type}</Text>
-          <View
-            style={[
-              styles.eventStatusBadge,
-              {
-                backgroundColor:
-                  event.status === "acked"
-                    ? "#4CAF50"
-                    : event.status === "rejected"
-                    ? "#F44336"
-                    : "#FF9800",
-              },
-            ]}
-          >
-            <Text style={styles.eventStatusText}>
-              {event.status.toUpperCase()}
-            </Text>
+          <View style={styles.eventHeaderRight}>
+            <View
+              style={[
+                styles.eventStatusBadge,
+                {
+                  backgroundColor:
+                    event.status === "acked"
+                      ? "#4CAF50"
+                      : event.status === "rejected"
+                      ? "#F44336"
+                      : "#FF9800",
+                },
+              ]}
+            >
+              <Text style={styles.eventStatusText}>
+                {event.status.toUpperCase()}
+              </Text>
+            </View>
+            {isPending && (
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  isSending && styles.sendButtonDisabled,
+                ]}
+                onPress={() => handleSendEvent(event)}
+                disabled={isSending}
+                activeOpacity={0.7}
+              >
+                {isSending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.sendButtonText}>Send</Text>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         </View>
         <View style={styles.eventDetails}>
@@ -181,6 +271,7 @@ export default function OutboxScreen() {
 
   const renderOutboxItem = ({ item }: { item: OutboxWithEvents }) => {
     const { outbox, events } = item;
+    const pendingEvents = events.filter((e) => e.status === "pending");
 
     return (
       <View style={styles.outboxCard}>
@@ -238,7 +329,15 @@ export default function OutboxScreen() {
 
         <View style={styles.eventsSection}>
           <View style={styles.eventsHeader}>
-            <Text style={styles.eventsTitle}>Events ({events.length})</Text>
+            <Text style={styles.eventsTitle}>
+              Events ({events.length})
+              {pendingEvents.length > 0 && (
+                <Text style={styles.pendingCount}>
+                  {" "}
+                  • {pendingEvents.length} pending
+                </Text>
+              )}
+            </Text>
           </View>
           {events.length === 0 ? (
             <View style={styles.noEventsContainer}>
@@ -276,6 +375,11 @@ export default function OutboxScreen() {
             <Text style={styles.headerSubtitle}>
               {outboxes.length} outbox{outboxes.length !== 1 ? "es" : ""} found
             </Text>
+            {!isConnected && role === "none" && (
+              <Text style={styles.connectionWarning}>
+                ⚠️ Not connected to relay
+              </Text>
+            )}
           </View>
         </View>
       </View>
@@ -338,6 +442,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#E3F2FD",
     opacity: 0.9,
+  },
+  connectionWarning: {
+    fontSize: 12,
+    color: "#FFF59D",
+    marginTop: 4,
+    fontWeight: "600",
   },
   loadingText: {
     marginTop: 12,
@@ -448,6 +558,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#212121",
   },
+  pendingCount: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#FF9800",
+  },
   eventsList: {
     maxHeight: 400,
   },
@@ -465,6 +580,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
+  eventHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   eventType: {
     fontSize: 13,
     fontWeight: "600",
@@ -475,11 +595,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
-    marginLeft: 8,
   },
   eventStatusText: {
     color: "#FFFFFF",
     fontSize: 10,
+    fontWeight: "600",
+  },
+  sendButton: {
+    backgroundColor: "#2196F3",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    minWidth: 60,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendButtonDisabled: {
+    backgroundColor: "#BBDEFB",
+  },
+  sendButtonText: {
+    color: "#FFFFFF",
+    fontSize: 11,
     fontWeight: "600",
   },
   eventDetails: {
