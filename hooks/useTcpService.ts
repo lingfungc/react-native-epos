@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DeviceService } from "./DeviceService";
+import { DeviceService } from "../services/DeviceService";
 import TcpService, {
   TcpConnectionInfo,
   TcpMessage,
   TcpRole,
   TcpServiceDelegate,
-} from "./TcpService";
+} from "../services/TcpService";
 
 export interface UseTcpServiceResult {
   role: TcpRole;
@@ -60,6 +60,7 @@ export function useTcpService(): UseTcpServiceResult {
         console.error(
           "DeviceService not initialized. Make sure to call DeviceService.initialize() in your app startup."
         );
+        console.error("DeviceService error: ", error);
       }
 
       const delegate: TcpServiceDelegate = {

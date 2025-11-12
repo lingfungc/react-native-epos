@@ -8,12 +8,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useTcpService } from "../hooks/useTcpService";
 import {
   formatConnectionString,
   isValidIpAddress,
   isValidPort,
-} from "../services/NetworkUtils";
-import { useTcpService } from "../services/useTcpService";
+} from "../utils/NetworkUtils";
 
 export default function TcpConnectionScreen() {
   const {
