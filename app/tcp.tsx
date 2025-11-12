@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import { DiscoveredService } from "@/services/BonjourService";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   ScrollView,
@@ -23,7 +24,7 @@ export default function TcpConnectionScreen() {
     venueId,
     connectionInfo,
     connectedClients,
-    connectedClientsInfo,
+    // connectedClientsInfo,
     messages,
     isConnected,
     error,
@@ -32,12 +33,28 @@ export default function TcpConnectionScreen() {
     sendMessage,
     disconnect,
     getClientInfo,
+
+    discoveredServices,
+    isScanning,
+    startDiscovery,
+    stopDiscovery,
+    connectToDiscoveredService,
   } = useTcpService();
 
   const [serverPort, setServerPort] = useState("8080");
   const [clientHost, setClientHost] = useState("");
   const [clientPort, setClientPort] = useState("8080");
   const [messageText, setMessageText] = useState("");
+
+  useEffect(() => {
+    if (!isConnected && role === "none") {
+      startDiscovery();
+    }
+
+    return () => {
+      stopDiscovery();
+    };
+  }, []);
 
   const handleStartServer = async () => {
     const port = parseInt(serverPort, 10);
@@ -110,6 +127,68 @@ export default function TcpConnectionScreen() {
     ]);
   };
 
+  const handleConnectToDiscovered = async (service: DiscoveredService) => {
+    try {
+      await connectToDiscoveredService(service);
+      Alert.alert(
+        "Connected",
+        `Connected to ${service.name}\n${service.host}:${service.port}`
+      );
+    } catch (err) {
+      Alert.alert("Connection Failed", (err as Error).message);
+    }
+  };
+
+  const renderDiscoveredServices = () => (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.cardTitle}>
+          Available Servers {isScanning && "(Scanning...)"}
+        </Text>
+        <TouchableOpacity
+          onPress={isScanning ? stopDiscovery : startDiscovery}
+          style={styles.refreshButton}
+        >
+          <Text style={styles.refreshButtonText}>
+            {isScanning ? "Stop" : "Refresh"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {discoveredServices.length === 0 ? (
+        <Text style={styles.emptyText}>
+          {isScanning
+            ? "Searching for servers..."
+            : "No servers found. Make sure a relay server is running."}
+        </Text>
+      ) : (
+        discoveredServices.map((service, index) => (
+          <TouchableOpacity
+            key={`${service.name}-${index}`}
+            style={styles.serviceItem}
+            onPress={() => handleConnectToDiscovered(service)}
+          >
+            <View style={styles.serviceIcon}>
+              <Text style={styles.serviceIconText}>📡</Text>
+            </View>
+            <View style={styles.serviceDetails}>
+              <Text style={styles.serviceName}>{service.name}</Text>
+              <Text style={styles.serviceAddress}>
+                {service.host}:{service.port}
+              </Text>
+              {service.txt?.venueId && (
+                <Text style={styles.serviceVenue}>
+                  Venue: {service.txt.venueId}
+                </Text>
+              )}
+            </View>
+            <Text style={styles.connectArrow}>→</Text>
+          </TouchableOpacity>
+        ))
+      )}
+    </View>
+  );
+
   const renderIdleState = () => (
     <View style={styles.section}>
       <View style={styles.card}>
@@ -133,6 +212,8 @@ export default function TcpConnectionScreen() {
           <Text style={styles.primaryButtonText}>Start Server</Text>
         </TouchableOpacity>
       </View>
+
+      {renderDiscoveredServices()}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Connect to Server</Text>
@@ -499,5 +580,74 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#856404",
     fontSize: 14,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  refreshButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#E3F2FD",
+    borderRadius: 4,
+  },
+  refreshButtonText: {
+    color: "#2196F3",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  emptyText: {
+    textAlign: "center",
+    color: "#999",
+    fontSize: 14,
+    paddingVertical: 20,
+  },
+  serviceItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "#F5F5F5",
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+  },
+  serviceIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#2196F3",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  serviceIconText: {
+    fontSize: 20,
+  },
+  serviceDetails: {
+    flex: 1,
+  },
+  serviceName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 2,
+  },
+  serviceAddress: {
+    fontSize: 12,
+    color: "#666",
+    fontFamily: "monospace",
+  },
+  serviceVenue: {
+    fontSize: 11,
+    color: "#888",
+    marginTop: 2,
+  },
+  connectArrow: {
+    fontSize: 24,
+    color: "#2196F3",
+    marginLeft: 8,
   },
 });

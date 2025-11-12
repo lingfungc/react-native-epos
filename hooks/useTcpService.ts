@@ -1,3 +1,4 @@
+import { DiscoveredService } from "@/services/BonjourService";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DeviceService } from "../services/DeviceService";
 import TcpService, {
@@ -18,8 +19,17 @@ export interface UseTcpServiceResult {
   messages: TcpMessage[];
   isConnected: boolean;
   error: Error | null;
+
+  discoveredServices: DiscoveredService[];
+  isScanning: boolean;
+
   startServer: (port?: number) => Promise<void>;
   connectToServer: (host: string, port: number) => Promise<void>;
+
+  startDiscovery: () => void;
+  stopDiscovery: () => void;
+  connectToDiscoveredService: (service: DiscoveredService) => Promise<void>;
+
   sendMessage: (
     message: Omit<TcpMessage, "deviceId" | "userId" | "venueId" | "timestamp">
   ) => void;
@@ -45,6 +55,11 @@ export function useTcpService(): UseTcpServiceResult {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
 
+  const [discoveredServices, setDiscoveredServices] = useState<
+    DiscoveredService[]
+  >([]);
+  const [isScanning, setIsScanning] = useState<boolean>(false);
+
   // Initialize TCP service
   useEffect(() => {
     if (!tcpServiceRef.current) {
@@ -57,13 +72,11 @@ export function useTcpService(): UseTcpServiceResult {
         setUserId(DeviceService.getUserId());
         setVenueId(DeviceService.getVenueId());
       } catch (error) {
-        console.error(
-          "DeviceService not initialized. Make sure to call DeviceService.initialize() in your app startup."
-        );
-        console.error("DeviceService error: ", error);
+        console.error("DeviceService not initialized");
       }
 
-      const delegate: TcpServiceDelegate = {
+      // TCP delegate
+      const tcpDelegate: TcpServiceDelegate = {
         onConnectionEstablished: (info) => {
           setConnectionInfo(info);
           setIsConnected(true);
@@ -78,8 +91,6 @@ export function useTcpService(): UseTcpServiceResult {
         },
         onMessageReceived: (message) => {
           setMessages((prev) => [...prev, message]);
-
-          // Update connected clients list if it's in the message
           if (message.data?.connectedClients) {
             setConnectedClients(message.data.connectedClients);
           }
@@ -108,11 +119,40 @@ export function useTcpService(): UseTcpServiceResult {
         },
       };
 
-      service.setDelegate(delegate);
+      service.setDelegate(tcpDelegate);
+
+      const bonjourService = service.getBonjourService();
+      bonjourService.setDelegate({
+        onServiceFound: (discoveredService) => {
+          console.log("📡 Service discovered:", discoveredService);
+          setDiscoveredServices((prev) => {
+            // Avoid duplicates
+            const exists = prev.some((s) => s.name === discoveredService.name);
+            if (exists) {
+              return prev.map((s) =>
+                s.name === discoveredService.name ? discoveredService : s
+              );
+            }
+            return [...prev, discoveredService];
+          });
+        },
+        onServiceLost: (lostService) => {
+          console.log("📡 Service lost:", lostService.name);
+          setDiscoveredServices((prev) =>
+            prev.filter((s) => s.name !== lostService.name)
+          );
+        },
+        onError: (err) => {
+          console.error("mDNS error:", err);
+          setError(err);
+        },
+      });
     }
 
     return () => {
       if (tcpServiceRef.current) {
+        const bonjourService = tcpServiceRef.current.getBonjourService();
+        bonjourService.cleanup();
         tcpServiceRef.current.stop();
       }
     };
@@ -144,6 +184,39 @@ export function useTcpService(): UseTcpServiceResult {
     }
   }, []);
 
+  const startDiscovery = useCallback(() => {
+    if (tcpServiceRef.current) {
+      const bonjourService = tcpServiceRef.current.getBonjourService();
+      bonjourService.startScanning();
+      setIsScanning(true);
+      setDiscoveredServices([]); // Clear old results
+    }
+  }, []);
+
+  const stopDiscovery = useCallback(() => {
+    if (tcpServiceRef.current) {
+      const bonjourService = tcpServiceRef.current.getBonjourService();
+      bonjourService.stopScanning();
+      setIsScanning(false);
+    }
+  }, []);
+
+  const connectToDiscoveredService = useCallback(
+    async (service: DiscoveredService) => {
+      try {
+        // Stop scanning first
+        stopDiscovery();
+
+        // Connect using discovered host and port
+        await connectToServer(service.host, service.port);
+      } catch (err) {
+        setError(err as Error);
+        throw err;
+      }
+    },
+    [connectToServer, stopDiscovery]
+  );
+
   const sendMessage = useCallback(
     (
       message: Omit<TcpMessage, "deviceId" | "userId" | "venueId" | "timestamp">
@@ -157,6 +230,7 @@ export function useTcpService(): UseTcpServiceResult {
 
   const disconnect = useCallback(() => {
     if (tcpServiceRef.current) {
+      stopDiscovery(); // Stop scanning if active
       tcpServiceRef.current.stop();
       setRole("none");
       setIsConnected(false);
@@ -165,8 +239,9 @@ export function useTcpService(): UseTcpServiceResult {
       setConnectedClientsInfo(new Map());
       setMessages([]);
       setError(null);
+      setDiscoveredServices([]);
     }
-  }, []);
+  }, [stopDiscovery]);
 
   const getClientInfo = useCallback((clientId: string):
     | Partial<TcpConnectionInfo>
@@ -185,8 +260,13 @@ export function useTcpService(): UseTcpServiceResult {
     messages,
     isConnected,
     error,
+    discoveredServices,
+    isScanning,
     startServer,
     connectToServer,
+    startDiscovery,
+    stopDiscovery,
+    connectToDiscoveredService,
     sendMessage,
     disconnect,
     getClientInfo,

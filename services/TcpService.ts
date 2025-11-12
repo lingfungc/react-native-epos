@@ -1,6 +1,7 @@
 import * as Device from "expo-device";
 import TcpSocket from "react-native-tcp-socket";
 
+import BonjourService from "./BonjourService";
 import { DeviceService } from "./DeviceService";
 
 /**
@@ -56,9 +57,11 @@ class TcpService {
   private role: TcpRole = "none";
   private delegate: TcpServiceDelegate | null = null;
   private heartbeatInterval: NodeJS.Timeout | null = null;
+  private bonjourService: BonjourService;
 
-  // constructor() {
-  // }
+  constructor() {
+    this.bonjourService = new BonjourService();
+  }
 
   public setDelegate(delegate: TcpServiceDelegate) {
     this.delegate = delegate;
@@ -120,12 +123,22 @@ class TcpService {
           };
 
           this.startHeartbeat();
+
+          this.bonjourService.publishService(
+            info.port,
+            info.deviceId,
+            info.userId,
+            info.venueId
+          );
+
           this.delegate?.onConnectionEstablished?.(info);
 
           console.log(`TCP Server started on ${info.address}:${info.port}`);
           console.log(
             `Device: ${info.deviceId}, User: ${info.userId}, Venue: ${info.venueId}`
           );
+          console.log(`📡 Broadcasting via mDNS...`);
+
           resolve(info);
         });
 
@@ -365,6 +378,8 @@ class TcpService {
   private cleanup() {
     this.stopHeartbeat();
 
+    this.bonjourService.unpublishService();
+
     if (this.server) {
       try {
         this.server.close();
@@ -395,6 +410,10 @@ class TcpService {
 
     this.role = "none";
     this.delegate?.onConnectionClosed?.();
+  }
+
+  public getBonjourService(): BonjourService {
+    return this.bonjourService;
   }
 
   private getLocalIpAddress(address: any): string {
