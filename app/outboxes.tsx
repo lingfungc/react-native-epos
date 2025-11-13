@@ -2,6 +2,7 @@ import { eventsCollection, outboxesCollection } from "@/db";
 import Event from "@/models/Event";
 import type { OutboxStatus } from "@/models/Outbox";
 import Outbox from "@/models/Outbox";
+import { OutboxService } from "@/services/OutboxService";
 import { Q } from "@nozbe/watermelondb";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -135,6 +136,7 @@ export default function OutboxScreen() {
     new Set()
   );
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const [clearing, setClearing] = useState(false);
 
   const { isConnected, role, sendMessage } = useTcpService();
 
@@ -332,6 +334,26 @@ export default function OutboxScreen() {
     }
   };
 
+  const handleClearSynced = async () => {
+    try {
+      setClearing(true);
+      const count = await OutboxService.clearSyncedOutboxes();
+      if (count > 0) {
+        Alert.alert(
+          "Success",
+          `Cleared ${count} synced outbox${count !== 1 ? "es" : ""}`
+        );
+      } else {
+        Alert.alert("Info", "No synced outboxes to clear");
+      }
+    } catch (error) {
+      console.error("Error clearing synced outboxes:", error);
+      Alert.alert("Error", "Failed to clear synced outboxes");
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const formatDate = (timestamp: number | undefined): string => {
     if (!timestamp) return "N/A";
     return new Date(timestamp).toLocaleString();
@@ -442,20 +464,35 @@ export default function OutboxScreen() {
 
     return (
       <View style={styles.outboxCard}>
-        <View style={styles.outboxHeader}>
-          <View style={styles.outboxHeaderLeft}>
-            <Text style={styles.outboxDate}>
-              {formatDateString(outbox.date)}
-            </Text>
-            <Text style={styles.outboxId}>ID: {outbox.id.slice(-8)}</Text>
-          </View>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusColor(outbox.status) },
-            ]}
-          >
-            <Text style={styles.statusText}>{outbox.status.toUpperCase()}</Text>
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>Outbox</Text>
+              <Text style={styles.headerSubtitle}>
+                {outboxes.length} outbox{outboxes.length !== 1 ? "es" : ""}{" "}
+                found
+              </Text>
+              {!isConnected && role === "none" && (
+                <Text style={styles.connectionWarning}>
+                  ⚠️ Not connected to relay
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.clearButton,
+                clearing && styles.clearButtonDisabled,
+              ]}
+              onPress={handleClearSynced}
+              disabled={clearing}
+              activeOpacity={0.7}
+            >
+              {clearing ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.clearButtonText}>Clear Synced</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -870,5 +907,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#9E9E9E",
     fontStyle: "italic",
+  },
+  clearButton: {
+    backgroundColor: "#FF5722",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    minWidth: 100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clearButtonDisabled: {
+    backgroundColor: "#FFCCBC",
+  },
+  clearButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "600",
   },
 });

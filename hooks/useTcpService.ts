@@ -1,4 +1,5 @@
 import { ClientService } from "@/services/ClientService";
+import { OutboxService } from "@/services/OutboxService";
 import { RelayService } from "@/services/RelayService";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DeviceService } from "../services/DeviceService";
@@ -101,31 +102,42 @@ useEffect(() => {
         if (isRelay && message.type === "sync" && message.data) {
           console.log("🔄 [Relay Mode] Processing sync event from client...");
           try {
-            await RelayService.onEventReceived(
+            const appliedEventIds = await RelayService.onEventReceived(
               message.data,
               message.deviceId,
               message.userId,
               message.venueId
             );
 
-            // Send acknowledgment back to client
-            const ackMessage = RelayService.createAckMessage(
-              message.data.eventId,
-              true
-            );
-            tcpService.sendMessage(ackMessage);
+            // Send applied message with event IDs
+            const appliedMessage = RelayService.createAppliedMessage(appliedEventIds);
+            tcpService.sendMessage(appliedMessage);
 
-            console.log("✅ [Relay Mode] Event processed and ack sent");
+            console.log("✅ [Relay Mode] Event processed and applied message sent");
           } catch (error) {
             console.error("❌ [Relay Mode] Error processing event:", error);
 
-            // Send error acknowledgment
+            // Send error acknowledgment (fallback)
             const ackMessage = RelayService.createAckMessage(
               message.data.eventId,
               false,
               (error as Error).message
             );
             tcpService.sendMessage(ackMessage);
+          }
+        }
+
+        // CLIENT MODE: Handle "applied" messages from relay
+        if (!isRelay && message.type === "applied" && message.data) {
+          console.log("✅ [Client Mode] Received applied confirmation from relay");
+          console.log("Applied event IDs:", message.data.appliedEventIds);
+
+          try {
+            // Confirm the events in outbox
+            await OutboxService.confirmApplied(message.data.appliedEventIds);
+            console.log("✅ [Client Mode] Outbox confirmed as synced");
+          } catch (error) {
+            console.error("❌ [Client Mode] Error confirming outbox:", error);
           }
         }
 
@@ -145,7 +157,7 @@ useEffect(() => {
               ClientService.updateLamportClock(message.data.lamportClock);
             }
 
-            // Optionally send acknowledgment back to relay
+            // Send acknowledgment back to relay
             const processedMessage = ClientService.createProcessedMessage(
               message.data.eventId,
               true

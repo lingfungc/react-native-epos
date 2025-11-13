@@ -26,10 +26,11 @@ export class RelayService {
     senderDeviceId: string,
     senderUserId: string,
     senderVenueId: string
-  ): Promise<void> {
+  ): Promise<string[]> {
+    // CHANGED: Now returns array of applied event IDs
     if (!isRelay) {
       console.warn("⚠️ RelayService called but not in relay mode");
-      return;
+      return [];
     }
 
     console.log("📥 [RelayService] Event received from client");
@@ -72,6 +73,9 @@ export class RelayService {
       }
 
       console.log("✅ [RelayService] Event processed successfully");
+
+      // CHANGED: Return the event ID to confirm it was applied
+      return [eventData.eventId];
     } catch (error) {
       console.error("❌ [RelayService] Error handling event:", error);
       throw error;
@@ -313,8 +317,22 @@ export class RelayService {
   }
 
   /**
-   * Send acknowledgment back to client
-   * This can be used to notify the client that the event was processed
+   * Create acknowledgment with applied event IDs
+   * NEW: Returns list of successfully applied events
+   */
+  static createAppliedMessage(appliedEventIds: string[]) {
+    return {
+      type: "applied" as const,
+      data: {
+        appliedEventIds,
+        timestamp: Date.now(),
+      },
+    };
+  }
+
+  /**
+   * Send acknowledgment back to client (DEPRECATED - use createAppliedMessage)
+   * Keeping for backward compatibility
    */
   static createAckMessage(eventId: string, success: boolean, error?: string) {
     return {

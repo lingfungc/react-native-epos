@@ -69,6 +69,16 @@ export class OutboxService {
   }
 
   /**
+   * NEW: Get syncing outboxes (in progress)
+   * PURPOSE: Track outboxes currently being synced
+   */
+  static async getSyncingOutboxes(): Promise<Outbox[]> {
+    return await outboxesCollection
+      .query(Q.where("status", "syncing"), Q.sortBy("date", Q.asc))
+      .fetch();
+  }
+
+  /**
    * Get events for a specific outbox
    */
   static async getOutboxEvents(outboxId: string): Promise<Event[]> {
@@ -140,6 +150,126 @@ export class OutboxService {
    */
   static async markOutboxAsSynced(outboxId: string): Promise<Outbox> {
     return await this.updateOutboxStatus(outboxId, "synced");
+  }
+
+  /**
+   * NEW: Mark outbox as syncing by wrapping the existing method
+   * PURPOSE: Convenience method with logging for sync workflow
+   */
+  static async markAsSyncing(outboxId: string): Promise<void> {
+    try {
+      await this.markOutboxAsSyncing(outboxId);
+      console.log(`📤 [OutboxService] Outbox ${outboxId} marked as syncing`);
+    } catch (error) {
+      console.error("Error marking outbox as syncing:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * NEW: Confirm events were applied on relay
+   * PURPOSE: Core sync protocol - mark outbox as synced after relay confirms
+   * Mark outbox as synced and set syncedAt timestamp
+   */
+  static async confirmApplied(appliedEventIds: string[]): Promise<void> {
+    if (appliedEventIds.length === 0) {
+      console.log("ℹ️ [OutboxService] No events to confirm");
+      return;
+    }
+
+    try {
+      console.log(
+        `✅ [OutboxService] Confirming ${appliedEventIds.length} applied events`
+      );
+
+      // Find all events that were applied
+      const appliedEvents = await eventsCollection
+        .query(Q.where("id", Q.oneOf(appliedEventIds)))
+        .fetch();
+
+      if (appliedEvents.length === 0) {
+        console.warn("⚠️ [OutboxService] No matching events found");
+        return;
+      }
+
+      // Get unique outbox IDs from these events
+      const outboxIds = new Set(
+        appliedEvents
+          .map((e) => e.outboxId)
+          .filter((id): id is string => id !== null && id !== undefined)
+      );
+
+      console.log(
+        `📦 [OutboxService] Marking ${outboxIds.size} outboxes as synced`
+      );
+
+      // Mark each outbox as synced
+      await database.write(async () => {
+        for (const outboxId of outboxIds) {
+          try {
+            const outbox = await outboxesCollection.find(outboxId);
+            await outbox.update((o) => {
+              o.status = "synced";
+              o.syncedAt = Date.now();
+            });
+            console.log(`✅ Outbox ${outboxId} marked as synced`);
+          } catch (error) {
+            console.error(`Error updating outbox ${outboxId}:`, error);
+          }
+        }
+      });
+
+      console.log("✅ [OutboxService] All outboxes confirmed");
+    } catch (error) {
+      console.error("Error confirming applied events:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * NEW: Clear synced outboxes (safe cleanup after confirmation)
+   * PURPOSE: Remove confirmed synced data to keep database clean
+   * Only clears outboxes that have been confirmed synced by relay
+   */
+  static async clearSyncedOutboxes(): Promise<number> {
+    try {
+      const syncedOutboxes = await outboxesCollection
+        .query(Q.where("status", "synced"))
+        .fetch();
+
+      if (syncedOutboxes.length === 0) {
+        console.log("ℹ️ [OutboxService] No synced outboxes to clear");
+        return 0;
+      }
+
+      // Get all events from these outboxes
+      const outboxIds = syncedOutboxes.map((o) => o.id);
+      const events = await eventsCollection
+        .query(Q.where("outbox_id", Q.oneOf(outboxIds)))
+        .fetch();
+
+      console.log(
+        `🗑️ [OutboxService] Clearing ${syncedOutboxes.length} synced outboxes with ${events.length} events`
+      );
+
+      await database.write(async () => {
+        // Delete events first (foreign key constraint)
+        for (const event of events) {
+          await event.markAsDeleted();
+        }
+
+        // Then delete outboxes
+        for (const outbox of syncedOutboxes) {
+          await outbox.markAsDeleted();
+        }
+      });
+
+      console.log("✅ [OutboxService] Cleared synced outboxes");
+      return syncedOutboxes.length;
+    } catch (error) {
+      console.error("Error clearing synced outboxes:", error);
+      throw error;
+    }
   }
 
   /**
