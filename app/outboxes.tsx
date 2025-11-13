@@ -180,6 +180,7 @@ export default function OutboxScreen() {
             const events = await eventsCollection
               .query(
                 Q.where("outbox_id", outbox.id),
+                Q.where("status", Q.oneOf(["pending", "rejected"])),
                 Q.sortBy("sequence", Q.asc)
               )
               .fetch();
@@ -248,7 +249,11 @@ export default function OutboxScreen() {
       outboxesData.map(async (outbox) => {
         // Explicitly query events that belong to this outbox
         const events = await eventsCollection
-          .query(Q.where("outbox_id", outbox.id), Q.sortBy("sequence", Q.asc))
+          .query(
+            Q.where("outbox_id", outbox.id),
+            Q.where("status", Q.oneOf(["pending", "rejected"])),
+            Q.sortBy("sequence", Q.asc)
+          )
           .fetch();
 
         return {
@@ -478,7 +483,7 @@ export default function OutboxScreen() {
                 </Text>
               )}
             </View>
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={[
                 styles.clearButton,
                 clearing && styles.clearButtonDisabled,
@@ -492,7 +497,7 @@ export default function OutboxScreen() {
               ) : (
                 <Text style={styles.clearButtonText}>Clear Synced</Text>
               )}
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </View>
 

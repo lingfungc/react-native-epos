@@ -204,7 +204,7 @@ export class RelayService {
             console.log("Creating order with items:", items);
 
             order.itemsJson = JSON.stringify(items);
-            order.status = "open";
+            order.status = "closed";
             order.openedAt = Date.now();
 
             // Use the calculated values from payload

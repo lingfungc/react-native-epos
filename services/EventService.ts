@@ -200,6 +200,9 @@ export class EventService {
         }
       });
 
+      // NEW: Handle order-specific logic for acked events
+      await this.handleOrderEventsAfterAck(events);
+
       // After marking events as acked, check if their outboxes should be marked as synced
       await this.updateOutboxStatusesAfterAck(events);
 
@@ -207,6 +210,48 @@ export class EventService {
     } catch (error) {
       console.error("Error marking events as acked:", error);
       throw error;
+    }
+  }
+
+  /**
+   * Handle order-specific logic after events are acked
+   * PURPOSE: Close orders when their events are confirmed by relay
+   */
+  private static async handleOrderEventsAfterAck(
+    ackedEvents: Event[]
+  ): Promise<void> {
+    try {
+      // Filter for order-related events only
+      const orderEvents = ackedEvents.filter((e) => e.entity === "order");
+
+      if (orderEvents.length === 0) {
+        console.log("ℹ️ [EventService] No order events to process");
+        return;
+      }
+
+      console.log(
+        `📦 [EventService] Processing ${orderEvents.length} order events`
+      );
+
+      // Get unique order IDs
+      const orderIds = [...new Set(orderEvents.map((e) => e.entityId))];
+
+      // Import OrderService (add this at the top of the file)
+      const { OrderService } = await import("./OrderService");
+
+      // Close each order
+      for (const orderId of orderIds) {
+        try {
+          await OrderService.markAsClosed(orderId);
+          console.log(`✅ Order ${orderId} marked as closed`);
+        } catch (error) {
+          console.error(`❌ Error closing order ${orderId}:`, error);
+          // Continue with other orders even if one fails
+        }
+      }
+    } catch (error) {
+      console.error("Error handling order events after ack:", error);
+      // Don't throw - this is not critical to the ack process
     }
   }
 

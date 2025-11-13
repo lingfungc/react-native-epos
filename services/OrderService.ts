@@ -555,4 +555,29 @@ export class OrderService {
       )
       .fetch();
   }
+
+  /**
+   * Mark an order as closed
+   * PURPOSE: Close order after events are confirmed by relay
+   * This is called when order events are acked
+   */
+  static async markAsClosed(orderId: string): Promise<void> {
+    try {
+      console.log(`🔒 [OrderService] Marking order ${orderId} as closed`);
+
+      const order = await ordersCollection.find(orderId);
+
+      await database.write(async () => {
+        await order.update((o) => {
+          o.status = "closed";
+          o.closedAt = Date.now();
+        });
+      });
+
+      console.log(`✅ [OrderService] Order ${orderId} marked as closed`);
+    } catch (error) {
+      console.error(`❌ [OrderService] Error marking order as closed:`, error);
+      throw error;
+    }
+  }
 }
