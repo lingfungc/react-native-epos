@@ -34,6 +34,7 @@ export class OutboxService {
       return await outboxesCollection.create((outbox) => {
         outbox.date = todayDate;
         outbox.status = "pending";
+        outbox.sequence = 0; // Will be updated as events are added
         outbox.deviceId = DeviceService.getDeviceId();
         outbox.venueId = DeviceService.getVenueId();
       });
@@ -106,6 +107,22 @@ export class OutboxService {
         if (status === "synced") {
           o.syncedAt = Date.now();
         }
+      });
+      return outbox;
+    });
+  }
+
+  /**
+   * Update outbox sequence number
+   */
+  static async updateOutboxSequence(
+    outboxId: string,
+    sequence: number
+  ): Promise<Outbox> {
+    return await database.write(async () => {
+      const outbox = await outboxesCollection.find(outboxId);
+      await outbox.update((o) => {
+        o.sequence = sequence;
       });
       return outbox;
     });

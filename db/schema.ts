@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from "@nozbe/watermelondb";
 
 export default appSchema({
-  version: 7,
+  version: 8,
   tables: [
     tableSchema({
       name: "events",
@@ -68,6 +68,7 @@ export default appSchema({
       columns: [
         { name: "date", type: "string", isIndexed: true },
         { name: "status", type: "string", isIndexed: true },
+        { name: "sequence", type: "number" },
         { name: "device_id", type: "string" },
         { name: "venue_id", type: "string" },
         { name: "synced_at", type: "number", isOptional: true },

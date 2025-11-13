@@ -131,5 +131,14 @@ export default schemaMigrations({
         }),
       ],
     },
+    {
+      toVersion: 8,
+      steps: [
+        addColumns({
+          table: "outboxes",
+          columns: [{ name: "sequence", type: "number" }],
+        }),
+      ],
+    },
   ],
 });

@@ -1,5 +1,5 @@
 import { Model, Query } from "@nozbe/watermelondb";
-import { children, date, text } from "@nozbe/watermelondb/decorators";
+import { children, date, field, text } from "@nozbe/watermelondb/decorators";
 import Event from "./Event";
 
 export type OutboxStatus = "pending" | "syncing" | "synced";
@@ -17,6 +17,7 @@ export default class Outbox extends Model {
   @date("synced_at") syncedAt?: number;
   @text("device_id") deviceId!: string;
   @text("venue_id") venueId!: string;
+  @field("sequence") sequence!: number;
   @date("created_at") createdAt!: number;
   @date("updated_at") updatedAt!: number;
 
