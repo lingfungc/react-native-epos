@@ -155,7 +155,6 @@ export default function OrdersScreen() {
       .query(Q.sortBy("created_at", Q.desc))
       .observe()
       .subscribe((ordersData) => {
-        console.log("Orders: ", ordersData);
         setOrders(ordersData);
         setLoading(false);
         setRefreshing(false);

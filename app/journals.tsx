@@ -6,6 +6,7 @@ import { Q } from "@nozbe/watermelondb";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   RefreshControl,
@@ -15,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useTcpService } from "../hooks/useTcpService";
 
 type JournalWithEvents = {
   journal: Journal;
@@ -130,6 +132,11 @@ export default function JournalsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const [sendingEventIds, setSendingEventIds] = useState<Set<string>>(
+    new Set()
+  );
+
+  const { isConnected, role, sendMessage } = useTcpService();
 
   // Group journals by date
   const groupedJournals: GroupedJournals[] = React.useMemo(() => {
@@ -265,6 +272,79 @@ export default function JournalsScreen() {
     });
   };
 
+  const handleBroadcastEvent = async (event: Event) => {
+    if (!isConnected) {
+      Alert.alert(
+        "Not Connected",
+        "Please connect to the relay server first via the TCP tab."
+      );
+      return;
+    }
+
+    if (role !== "server") {
+      Alert.alert(
+        "Invalid Role",
+        "Only relay servers can broadcast events to clients. Current role: " +
+          role
+      );
+      return;
+    }
+
+    if (event.status !== "acked") {
+      Alert.alert(
+        "Invalid Status",
+        "Only acked events can be broadcast to clients."
+      );
+      return;
+    }
+
+    try {
+      setSendingEventIds((prev) => new Set(prev).add(event.id));
+
+      // Parse the payload
+      let payload: any = null;
+      try {
+        payload = JSON.parse(event.payloadJson);
+      } catch (e) {
+        console.error("Failed to parse event payload:", e);
+      }
+
+      // Broadcast the acked event to all connected clients via TCP
+      sendMessage({
+        type: "broadcast",
+        data: {
+          eventId: event.id,
+          sequence: event.sequence,
+          entity: event.entity,
+          entityId: event.entityId,
+          eventType: event.type,
+          payload: payload,
+          lamportClock: event.lamportClock,
+          status: event.status,
+          journalId: event.journalId,
+          createdAt: event.createdAt,
+          ackedAt: event.ackedAt,
+        },
+      });
+
+      console.log("📡 Event broadcast to all clients:", event.id);
+
+      Alert.alert("Success", "Event broadcast to all clients successfully!");
+    } catch (error) {
+      console.error("Error broadcasting event:", error);
+      Alert.alert(
+        "Error",
+        `Failed to broadcast event: ${(error as Error).message}`
+      );
+    } finally {
+      setSendingEventIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(event.id);
+        return newSet;
+      });
+    }
+  };
+
   const formatDate = (timestamp: number | undefined): string => {
     if (!timestamp) return "N/A";
     return new Date(timestamp).toLocaleString();
@@ -318,26 +398,48 @@ export default function JournalsScreen() {
       // Invalid JSON, ignore
     }
 
+    const isSending = sendingEventIds.has(event.id);
+    const isAcked = event.status === "acked";
+
     return (
       <View key={event.id} style={styles.eventItem}>
         <View style={styles.eventHeader}>
           <Text style={styles.eventType}>{event.type}</Text>
-          <View
-            style={[
-              styles.eventStatusBadge,
-              {
-                backgroundColor:
-                  event.status === "acked"
-                    ? "#4CAF50"
-                    : event.status === "rejected"
-                    ? "#F44336"
-                    : "#FF9800",
-              },
-            ]}
-          >
-            <Text style={styles.eventStatusText}>
-              {event.status.toUpperCase()}
-            </Text>
+          <View style={styles.eventHeaderRight}>
+            <View
+              style={[
+                styles.eventStatusBadge,
+                {
+                  backgroundColor:
+                    event.status === "acked"
+                      ? "#4CAF50"
+                      : event.status === "rejected"
+                      ? "#F44336"
+                      : "#FF9800",
+                },
+              ]}
+            >
+              <Text style={styles.eventStatusText}>
+                {event.status.toUpperCase()}
+              </Text>
+            </View>
+            {isAcked && (
+              <TouchableOpacity
+                style={[
+                  styles.broadcastButton,
+                  isSending && styles.broadcastButtonDisabled,
+                ]}
+                onPress={() => handleBroadcastEvent(event)}
+                disabled={isSending}
+                activeOpacity={0.7}
+              >
+                {isSending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.broadcastButtonText}>Broadcast</Text>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         </View>
         <View style={styles.eventDetails}>
@@ -350,6 +452,11 @@ export default function JournalsScreen() {
           <Text style={styles.eventDetailText}>
             Created: {formatDate(event.createdAt)}
           </Text>
+          {event.ackedAt && (
+            <Text style={styles.eventDetailText}>
+              Acked: {formatDate(event.ackedAt)}
+            </Text>
+          )}
           {payload && (
             <Text style={styles.eventPayload} numberOfLines={2}>
               Payload: {JSON.stringify(payload)}
@@ -362,6 +469,7 @@ export default function JournalsScreen() {
 
   const renderJournalItem = ({ item }: { item: JournalWithEvents }) => {
     const { journal, events } = item;
+    const ackedEvents = events.filter((e) => e.status === "acked");
 
     return (
       <View style={styles.journalCard}>
@@ -441,7 +549,15 @@ export default function JournalsScreen() {
 
         <View style={styles.eventsSection}>
           <View style={styles.eventsHeader}>
-            <Text style={styles.eventsTitle}>Events ({events.length})</Text>
+            <Text style={styles.eventsTitle}>
+              Events ({events.length})
+              {ackedEvents.length > 0 && (
+                <Text style={styles.ackedCount}>
+                  {" "}
+                  • {ackedEvents.length} acked
+                </Text>
+              )}
+            </Text>
           </View>
           {events.length === 0 ? (
             <View style={styles.noEventsContainer}>
@@ -492,6 +608,11 @@ export default function JournalsScreen() {
             <Text style={styles.headerSubtitle}>
               {journals.length} journal{journals.length !== 1 ? "s" : ""} found
             </Text>
+            {!isConnected && role === "none" && (
+              <Text style={styles.connectionWarning}>
+                ⚠️ Not connected to relay
+              </Text>
+            )}
           </View>
         </View>
       </View>
@@ -554,6 +675,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#E3F2FD",
     opacity: 0.9,
+  },
+  connectionWarning: {
+    fontSize: 12,
+    color: "#FFF59D",
+    marginTop: 4,
+    fontWeight: "600",
   },
   loadingText: {
     marginTop: 12,
@@ -728,6 +855,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#212121",
   },
+  ackedCount: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#4CAF50",
+  },
   eventsList: {
     maxHeight: 400,
   },
@@ -745,6 +877,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
+  eventHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   eventType: {
     fontSize: 13,
     fontWeight: "600",
@@ -755,11 +892,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
-    marginLeft: 8,
   },
   eventStatusText: {
     color: "#FFFFFF",
     fontSize: 10,
+    fontWeight: "600",
+  },
+  broadcastButton: {
+    backgroundColor: "#4CAF50",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    minWidth: 70,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  broadcastButtonDisabled: {
+    backgroundColor: "#A5D6A7",
+  },
+  broadcastButtonText: {
+    color: "#FFFFFF",
+    fontSize: 11,
     fontWeight: "600",
   },
   eventDetails: {

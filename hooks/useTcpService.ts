@@ -1,3 +1,4 @@
+import { ClientService } from "@/services/ClientService";
 import { RelayService } from "@/services/RelayService";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DeviceService } from "../services/DeviceService";
@@ -70,7 +71,7 @@ export function useTcpService(): UseTcpServiceResult {
   }, [tcpService]);
 
   // Set up persistent delegate
-  useEffect(() => {
+useEffect(() => {
     delegateRef.current = {
       onConnectionEstablished: (info) => {
         console.log("📡 Connection established:", info);
@@ -96,9 +97,9 @@ export function useTcpService(): UseTcpServiceResult {
           setConnectedClients(message.data.connectedClients);
         }
 
-        // Handle sync messages when in relay mode
+        // RELAY MODE: Handle sync messages from clients
         if (isRelay && message.type === "sync" && message.data) {
-          console.log("🔄 [Relay Mode] Processing sync event...");
+          console.log("🔄 [Relay Mode] Processing sync event from client...");
           try {
             await RelayService.onEventReceived(
               message.data,
@@ -125,6 +126,74 @@ export function useTcpService(): UseTcpServiceResult {
               (error as Error).message
             );
             tcpService.sendMessage(ackMessage);
+          }
+        }
+
+        // CLIENT MODE: Handle broadcast messages from relay
+        if (!isRelay && message.type === "broadcast" && message.data) {
+          console.log("📡 [Client Mode] Processing broadcast event from relay...");
+          try {
+            await ClientService.onBroadcastReceived(
+              message.data,
+              message.deviceId,
+              message.userId,
+              message.venueId
+            );
+
+            // Update Lamport clock
+            if (message.data.lamportClock) {
+              ClientService.updateLamportClock(message.data.lamportClock);
+            }
+
+            // Optionally send acknowledgment back to relay
+            const processedMessage = ClientService.createProcessedMessage(
+              message.data.eventId,
+              true
+            );
+            tcpService.sendMessage(processedMessage);
+
+            console.log("✅ [Client Mode] Broadcast event processed");
+          } catch (error) {
+            console.error("❌ [Client Mode] Error processing broadcast:", error);
+
+            // Send error acknowledgment
+            const processedMessage = ClientService.createProcessedMessage(
+              message.data.eventId,
+              false,
+              (error as Error).message
+            );
+            tcpService.sendMessage(processedMessage);
+          }
+        }
+
+        // Handle acknowledgments (both client and relay can receive these)
+        if (message.type === "ack" && message.data) {
+          console.log(
+            "✅ Received acknowledgment for event:",
+            message.data.eventId,
+            "Success:",
+            message.data.success
+          );
+          if (!message.data.success && message.data.error) {
+            console.error("❌ Event processing failed:", message.data.error);
+          }
+        }
+
+        // Handle processed messages (relay receives these from clients)
+        if (isRelay && message.type === "processed" && message.data) {
+          console.log(
+            "✅ [Relay Mode] Client processed broadcast:",
+            message.data.eventId,
+            "Device:",
+            message.data.deviceId,
+            "Success:",
+            message.data.success
+          );
+          if (!message.data.success && message.data.error) {
+            console.error(
+              "❌ [Relay Mode] Client processing failed:",
+              message.data.error
+            );
           }
         }
       },

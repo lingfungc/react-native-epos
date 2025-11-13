@@ -6,11 +6,13 @@ import { Platform } from "react-native";
 const DEVICE_ID_KEY = "@device_id";
 const USER_ID_KEY = "@user_id";
 const VENUE_ID_KEY = "@venue_id";
+const LAMPORT_CLOCK_KEY = "@lamport_clock";
 
 export class DeviceService {
   private static deviceId: string | null = null;
   private static userId: string | null = null;
   private static venueId: string | null = null;
+  private static lamportClock: number = 0;
 
   /**
    * Initialize device information
@@ -20,6 +22,7 @@ export class DeviceService {
     await this.getOrCreateDeviceId();
     await this.getOrCreateUserId();
     await this.getOrCreateVenueId();
+    await this.loadLamportClock();
   }
 
   /**
@@ -184,6 +187,85 @@ export class DeviceService {
   }
 
   /**
+   * Load Lamport clock from storage
+   */
+  private static async loadLamportClock(): Promise<void> {
+    try {
+      const storedClock = await AsyncStorage.getItem(LAMPORT_CLOCK_KEY);
+      if (storedClock) {
+        this.lamportClock = parseInt(storedClock, 10);
+        console.log("🕐 Loaded Lamport clock:", this.lamportClock);
+      } else {
+        this.lamportClock = 0;
+        await this.saveLamportClock();
+        console.log("🕐 Initialized Lamport clock to 0");
+      }
+    } catch (error) {
+      console.error("Error loading Lamport clock:", error);
+      this.lamportClock = 0;
+    }
+  }
+
+  /**
+   * Save Lamport clock to storage
+   */
+  private static async saveLamportClock(): Promise<void> {
+    try {
+      await AsyncStorage.setItem(
+        LAMPORT_CLOCK_KEY,
+        this.lamportClock.toString()
+      );
+    } catch (error) {
+      console.error("Error saving Lamport clock:", error);
+    }
+  }
+
+  /**
+   * Get the current Lamport clock value
+   */
+  static getLamportClock(): number {
+    return this.lamportClock;
+  }
+
+  /**
+   * Set the Lamport clock value
+   * Used when receiving events with higher clock values
+   */
+  static setLamportClock(value: number): void {
+    this.lamportClock = value;
+    // Save asynchronously (don't await to avoid blocking)
+    this.saveLamportClock().catch((error) => {
+      console.error("Error saving Lamport clock:", error);
+    });
+  }
+
+  /**
+   * Increment and return the Lamport clock
+   * Used when creating new local events
+   */
+  static incrementLamportClock(): number {
+    this.lamportClock++;
+    // Save asynchronously (don't await to avoid blocking)
+    this.saveLamportClock().catch((error) => {
+      console.error("Error saving Lamport clock:", error);
+    });
+    return this.lamportClock;
+  }
+
+  /**
+   * Update Lamport clock based on received clock value
+   * Implements: local_clock = max(local_clock, received_clock) + 1
+   */
+  static updateLamportClockOnReceive(receivedClock: number): number {
+    this.lamportClock = Math.max(this.lamportClock, receivedClock) + 1;
+    // Save asynchronously (don't await to avoid blocking)
+    this.saveLamportClock().catch((error) => {
+      console.error("Error saving Lamport clock:", error);
+    });
+    return this.lamportClock;
+  }
+
+  /**
    * Get comprehensive device information
    */
   static async getDeviceInfo(): Promise<{
@@ -191,6 +273,7 @@ export class DeviceService {
     userId: string;
     venueId: string;
     relayId: string;
+    lamportClock: number;
     deviceName: string | null;
     deviceType: Device.DeviceType | null;
     brand: string | null;
@@ -204,6 +287,7 @@ export class DeviceService {
       userId: this.getUserId(),
       venueId: this.getVenueId(),
       relayId: this.getRelayId(),
+      lamportClock: this.getLamportClock(),
       deviceName: Device.deviceName,
       deviceType: Device.deviceType,
       brand: Device.brand,
@@ -218,10 +302,16 @@ export class DeviceService {
    * Reset all stored IDs (useful for testing or logout)
    */
   static async reset(): Promise<void> {
-    await AsyncStorage.multiRemove([DEVICE_ID_KEY, USER_ID_KEY, VENUE_ID_KEY]);
+    await AsyncStorage.multiRemove([
+      DEVICE_ID_KEY,
+      USER_ID_KEY,
+      VENUE_ID_KEY,
+      LAMPORT_CLOCK_KEY,
+    ]);
     this.deviceId = null;
     this.userId = null;
     this.venueId = null;
+    this.lamportClock = 0;
     console.log("🔄 Reset all device identifiers");
   }
 

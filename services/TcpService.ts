@@ -19,7 +19,14 @@ console.log(
 );
 
 export interface TcpMessage {
-  type: "sync" | "update" | "heartbeat" | "join" | "leave" | "ack";
+  type:
+    | "sync"
+    | "update"
+    | "heartbeat"
+    | "join"
+    | "leave"
+    | "ack"
+    | "broadcast";
   deviceId: string;
   userId: string;
   venueId: string;
