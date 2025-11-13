@@ -3,10 +3,11 @@ import Event from "@/models/Event";
 import type { OutboxStatus } from "@/models/Outbox";
 import Outbox from "@/models/Outbox";
 import { Q } from "@nozbe/watermelondb";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   RefreshControl,
   ScrollView,
@@ -22,6 +23,110 @@ type OutboxWithEvents = {
   events: Event[];
 };
 
+interface GroupedOutboxes {
+  date: string;
+  outboxes: OutboxWithEvents[];
+}
+
+// Animated Group Component
+const AnimatedGroup = ({
+  item,
+  isExpanded,
+  onToggle,
+  renderOutboxItem,
+}: {
+  item: GroupedOutboxes;
+  isExpanded: boolean;
+  onToggle: () => void;
+  renderOutboxItem: (props: { item: OutboxWithEvents }) => JSX.Element;
+}) => {
+  const animatedHeight = useRef(new Animated.Value(0)).current;
+  const animatedRotation = useRef(new Animated.Value(0)).current;
+  const animatedOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(animatedHeight, {
+        toValue: isExpanded ? 1 : 0,
+        useNativeDriver: false,
+        friction: 8,
+        tension: 40,
+      }),
+      Animated.timing(animatedRotation, {
+        toValue: isExpanded ? 1 : 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(animatedOpacity, {
+        toValue: isExpanded ? 1 : 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [isExpanded]);
+
+  const rotateInterpolate = animatedRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "90deg"],
+  });
+
+  return (
+    <View style={styles.groupContainer}>
+      <TouchableOpacity
+        style={styles.dateHeader}
+        onPress={onToggle}
+        activeOpacity={0.7}
+      >
+        <View style={styles.dateHeaderLeft}>
+          <Text style={styles.dateHeaderText}>{item.date}</Text>
+          <Text style={styles.dateHeaderCount}>
+            {item.outboxes.length} outbox
+            {item.outboxes.length !== 1 ? "es" : ""}
+          </Text>
+        </View>
+        <Animated.View
+          style={{
+            transform: [{ rotate: rotateInterpolate }],
+          }}
+        >
+          <Text style={styles.expandIcon}>▶</Text>
+        </Animated.View>
+      </TouchableOpacity>
+
+      <Animated.View
+        style={[
+          styles.outboxesContainer,
+          {
+            maxHeight: animatedHeight.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 10000],
+            }),
+            opacity: animatedOpacity,
+          },
+        ]}
+      >
+        {item.outboxes.map((outbox) => (
+          <Animated.View
+            key={outbox.outbox.id}
+            style={{
+              transform: [
+                {
+                  translateY: animatedHeight.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-10, 0],
+                  }),
+                },
+              ],
+            }}
+          >
+            {renderOutboxItem({ item: outbox })}
+          </Animated.View>
+        ))}
+      </Animated.View>
+    </View>
+  );
+};
+
 export default function OutboxScreen() {
   const [outboxes, setOutboxes] = useState<OutboxWithEvents[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,8 +134,34 @@ export default function OutboxScreen() {
   const [sendingEventIds, setSendingEventIds] = useState<Set<string>>(
     new Set()
   );
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
 
   const { isConnected, role, sendMessage } = useTcpService();
+
+  // Group outboxes by date
+  const groupedOutboxes: GroupedOutboxes[] = React.useMemo(() => {
+    const groups: { [key: string]: OutboxWithEvents[] } = {};
+
+    outboxes.forEach((outboxWithEvents) => {
+      const date = new Date(outboxWithEvents.outbox.date);
+      const dateKey = date.toLocaleDateString("en-GB", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+      groups[dateKey].push(outboxWithEvents);
+    });
+
+    return Object.entries(groups).map(([date, outboxes]) => ({
+      date,
+      outboxes,
+    }));
+  }, [outboxes]);
 
   useEffect(() => {
     const loadOutboxes = async () => {
@@ -127,6 +258,18 @@ export default function OutboxScreen() {
 
     setOutboxes(outboxesWithEvents);
     setRefreshing(false);
+  };
+
+  const toggleDateExpansion = (date: string) => {
+    setExpandedDates((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(date)) {
+        newSet.delete(date);
+      } else {
+        newSet.add(date);
+      }
+      return newSet;
+    });
   };
 
   const handleSendEvent = async (event: Event) => {
@@ -381,6 +524,19 @@ export default function OutboxScreen() {
     );
   };
 
+  const renderGroup = ({ item }: { item: GroupedOutboxes }) => {
+    const isExpanded = expandedDates.has(item.date);
+
+    return (
+      <AnimatedGroup
+        item={item}
+        isExpanded={isExpanded}
+        onToggle={() => toggleDateExpansion(item.date)}
+        renderOutboxItem={renderOutboxItem}
+      />
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -416,9 +572,9 @@ export default function OutboxScreen() {
         </View>
       ) : (
         <FlatList
-          data={outboxes}
-          renderItem={renderOutboxItem}
-          keyExtractor={(item) => item.outbox.id}
+          data={groupedOutboxes}
+          renderItem={renderGroup}
+          keyExtractor={(item) => item.date}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -494,6 +650,53 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 12,
     paddingBottom: 20,
+  },
+  groupContainer: {
+    marginBottom: 8,
+    overflow: "hidden",
+  },
+  dateHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 8,
+    marginBottom: 4,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  dateHeaderLeft: {
+    flex: 1,
+  },
+  dateHeaderText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#212121",
+    marginBottom: 2,
+  },
+  dateHeaderCount: {
+    fontSize: 13,
+    color: "#757575",
+    fontWeight: "500",
+  },
+  expandIcon: {
+    fontSize: 14,
+    color: "#2196F3",
+    marginLeft: 12,
+    fontWeight: "bold",
+  },
+  outboxesContainer: {
+    marginTop: 4,
+    overflow: "hidden",
   },
   outboxCard: {
     backgroundColor: "#FFFFFF",

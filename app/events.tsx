@@ -2,20 +2,151 @@ import { eventsCollection } from "@/db";
 import type { EventStatus } from "@/models/Event";
 import Event from "@/models/Event";
 import { Q } from "@nozbe/watermelondb";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   RefreshControl,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
+
+interface GroupedEvents {
+  date: string;
+  events: Event[];
+}
+
+// Animated Group Component
+const AnimatedGroup = ({
+  item,
+  isExpanded,
+  onToggle,
+  renderEventItem,
+}: {
+  item: GroupedEvents;
+  isExpanded: boolean;
+  onToggle: () => void;
+  renderEventItem: (props: { item: Event }) => JSX.Element;
+}) => {
+  const animatedHeight = useRef(new Animated.Value(0)).current;
+  const animatedRotation = useRef(new Animated.Value(0)).current;
+  const animatedOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(animatedHeight, {
+        toValue: isExpanded ? 1 : 0,
+        useNativeDriver: false,
+        friction: 8,
+        tension: 40,
+      }),
+      Animated.timing(animatedRotation, {
+        toValue: isExpanded ? 1 : 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(animatedOpacity, {
+        toValue: isExpanded ? 1 : 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [isExpanded]);
+
+  const rotateInterpolate = animatedRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "90deg"],
+  });
+
+  return (
+    <View style={styles.groupContainer}>
+      <TouchableOpacity
+        style={styles.dateHeader}
+        onPress={onToggle}
+        activeOpacity={0.7}
+      >
+        <View style={styles.dateHeaderLeft}>
+          <Text style={styles.dateHeaderText}>{item.date}</Text>
+          <Text style={styles.dateHeaderCount}>
+            {item.events.length} event{item.events.length !== 1 ? "s" : ""}
+          </Text>
+        </View>
+        <Animated.View
+          style={{
+            transform: [{ rotate: rotateInterpolate }],
+          }}
+        >
+          <Text style={styles.expandIcon}>▶</Text>
+        </Animated.View>
+      </TouchableOpacity>
+
+      <Animated.View
+        style={[
+          styles.eventsContainer,
+          {
+            maxHeight: animatedHeight.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 10000],
+            }),
+            opacity: animatedOpacity,
+          },
+        ]}
+      >
+        {item.events.map((event) => (
+          <Animated.View
+            key={event.id}
+            style={{
+              transform: [
+                {
+                  translateY: animatedHeight.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-10, 0],
+                  }),
+                },
+              ],
+            }}
+          >
+            {renderEventItem({ item: event })}
+          </Animated.View>
+        ))}
+      </Animated.View>
+    </View>
+  );
+};
 
 export default function EventsScreen() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+
+  // Group events by date
+  const groupedEvents: GroupedEvents[] = React.useMemo(() => {
+    const groups: { [key: string]: Event[] } = {};
+
+    events.forEach((event) => {
+      const date = new Date(event.createdAt);
+      const dateKey = date.toLocaleDateString("en-GB", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+      groups[dateKey].push(event);
+    });
+
+    return Object.entries(groups).map(([date, events]) => ({
+      date,
+      events,
+    }));
+  }, [events]);
 
   useEffect(() => {
     const subscription = eventsCollection
@@ -33,9 +164,19 @@ export default function EventsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // The observe subscription will automatically update when data changes
-    // Just wait a moment for the refresh to complete
     setTimeout(() => setRefreshing(false), 500);
+  };
+
+  const toggleDateExpansion = (date: string) => {
+    setExpandedDates((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(date)) {
+        newSet.delete(date);
+      } else {
+        newSet.add(date);
+      }
+      return newSet;
+    });
   };
 
   const formatDate = (timestamp: number | undefined): string => {
@@ -145,6 +286,19 @@ export default function EventsScreen() {
     );
   };
 
+  const renderGroup = ({ item }: { item: GroupedEvents }) => {
+    const isExpanded = expandedDates.has(item.date);
+
+    return (
+      <AnimatedGroup
+        item={item}
+        isExpanded={isExpanded}
+        onToggle={() => toggleDateExpansion(item.date)}
+        renderEventItem={renderEventItem}
+      />
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -164,13 +318,6 @@ export default function EventsScreen() {
               {events.length} event{events.length !== 1 ? "s" : ""} found
             </Text>
           </View>
-          {/* <TouchableOpacity
-            style={styles.createButton}
-            onPress={createEvent}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.createButtonText}>+ Create</Text>
-          </TouchableOpacity> */}
         </View>
       </View>
       {events.length === 0 ? (
@@ -182,9 +329,9 @@ export default function EventsScreen() {
         </View>
       ) : (
         <FlatList
-          data={events}
-          renderItem={renderEventItem}
-          keyExtractor={(item) => item.id}
+          data={groupedEvents}
+          renderItem={renderGroup}
+          keyExtractor={(item) => item.date}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -273,6 +420,53 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 12,
     paddingBottom: 20,
+  },
+  groupContainer: {
+    marginBottom: 8,
+    overflow: "hidden",
+  },
+  dateHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 8,
+    marginBottom: 4,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  dateHeaderLeft: {
+    flex: 1,
+  },
+  dateHeaderText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#212121",
+    marginBottom: 2,
+  },
+  dateHeaderCount: {
+    fontSize: 13,
+    color: "#757575",
+    fontWeight: "500",
+  },
+  expandIcon: {
+    fontSize: 14,
+    color: "#2196F3",
+    marginLeft: 12,
+    fontWeight: "bold",
+  },
+  eventsContainer: {
+    marginTop: 4,
+    overflow: "hidden",
   },
   eventCard: {
     backgroundColor: "#FFFFFF",

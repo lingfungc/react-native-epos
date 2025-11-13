@@ -3,14 +3,16 @@ import Event from "@/models/Event";
 import type { JournalSource, JournalStatus } from "@/models/Journal";
 import Journal from "@/models/Journal";
 import { Q } from "@nozbe/watermelondb";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 
@@ -19,10 +21,140 @@ type JournalWithEvents = {
   events: Event[];
 };
 
+interface GroupedJournals {
+  date: string;
+  journals: JournalWithEvents[];
+}
+
+// Animated Group Component
+const AnimatedGroup = ({
+  item,
+  isExpanded,
+  onToggle,
+  renderJournalItem,
+}: {
+  item: GroupedJournals;
+  isExpanded: boolean;
+  onToggle: () => void;
+  renderJournalItem: (props: { item: JournalWithEvents }) => JSX.Element;
+}) => {
+  const animatedHeight = useRef(new Animated.Value(0)).current;
+  const animatedRotation = useRef(new Animated.Value(0)).current;
+  const animatedOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(animatedHeight, {
+        toValue: isExpanded ? 1 : 0,
+        useNativeDriver: false,
+        friction: 8,
+        tension: 40,
+      }),
+      Animated.timing(animatedRotation, {
+        toValue: isExpanded ? 1 : 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(animatedOpacity, {
+        toValue: isExpanded ? 1 : 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [isExpanded]);
+
+  const rotateInterpolate = animatedRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "90deg"],
+  });
+
+  return (
+    <View style={styles.groupContainer}>
+      <TouchableOpacity
+        style={styles.dateHeader}
+        onPress={onToggle}
+        activeOpacity={0.7}
+      >
+        <View style={styles.dateHeaderLeft}>
+          <Text style={styles.dateHeaderText}>{item.date}</Text>
+          <Text style={styles.dateHeaderCount}>
+            {item.journals.length} journal
+            {item.journals.length !== 1 ? "s" : ""}
+          </Text>
+        </View>
+        <Animated.View
+          style={{
+            transform: [{ rotate: rotateInterpolate }],
+          }}
+        >
+          <Text style={styles.expandIcon}>▶</Text>
+        </Animated.View>
+      </TouchableOpacity>
+
+      <Animated.View
+        style={[
+          styles.journalsContainer,
+          {
+            maxHeight: animatedHeight.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 10000],
+            }),
+            opacity: animatedOpacity,
+          },
+        ]}
+      >
+        {item.journals.map((journal) => (
+          <Animated.View
+            key={journal.journal.id}
+            style={{
+              transform: [
+                {
+                  translateY: animatedHeight.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-10, 0],
+                  }),
+                },
+              ],
+            }}
+          >
+            {renderJournalItem({ item: journal })}
+          </Animated.View>
+        ))}
+      </Animated.View>
+    </View>
+  );
+};
+
 export default function JournalsScreen() {
   const [journals, setJournals] = useState<JournalWithEvents[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+
+  // Group journals by date
+  const groupedJournals: GroupedJournals[] = React.useMemo(() => {
+    const groups: { [key: string]: JournalWithEvents[] } = {};
+
+    journals.forEach((journalWithEvents) => {
+      const date = new Date(journalWithEvents.journal.date);
+      const dateKey = date.toLocaleDateString("en-GB", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+      groups[dateKey].push(journalWithEvents);
+    });
+
+    return Object.entries(groups).map(([date, journals]) => ({
+      date,
+      journals,
+    }));
+  }, [journals]);
 
   useEffect(() => {
     const loadJournals = async () => {
@@ -119,6 +251,18 @@ export default function JournalsScreen() {
 
     setJournals(journalsWithEvents);
     setRefreshing(false);
+  };
+
+  const toggleDateExpansion = (date: string) => {
+    setExpandedDates((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(date)) {
+        newSet.delete(date);
+      } else {
+        newSet.add(date);
+      }
+      return newSet;
+    });
   };
 
   const formatDate = (timestamp: number | undefined): string => {
@@ -317,6 +461,19 @@ export default function JournalsScreen() {
     );
   };
 
+  const renderGroup = ({ item }: { item: GroupedJournals }) => {
+    const isExpanded = expandedDates.has(item.date);
+
+    return (
+      <AnimatedGroup
+        item={item}
+        isExpanded={isExpanded}
+        onToggle={() => toggleDateExpansion(item.date)}
+        renderJournalItem={renderJournalItem}
+      />
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -347,9 +504,9 @@ export default function JournalsScreen() {
         </View>
       ) : (
         <FlatList
-          data={journals}
-          renderItem={renderJournalItem}
-          keyExtractor={(item) => item.journal.id}
+          data={groupedJournals}
+          renderItem={renderGroup}
+          keyExtractor={(item) => item.date}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -419,6 +576,53 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 12,
     paddingBottom: 20,
+  },
+  groupContainer: {
+    marginBottom: 8,
+    overflow: "hidden",
+  },
+  dateHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 8,
+    marginBottom: 4,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  dateHeaderLeft: {
+    flex: 1,
+  },
+  dateHeaderText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#212121",
+    marginBottom: 2,
+  },
+  dateHeaderCount: {
+    fontSize: 13,
+    color: "#757575",
+    fontWeight: "500",
+  },
+  expandIcon: {
+    fontSize: 14,
+    color: "#2196F3",
+    marginLeft: 12,
+    fontWeight: "bold",
+  },
+  journalsContainer: {
+    marginTop: 4,
+    overflow: "hidden",
   },
   journalCard: {
     backgroundColor: "#FFFFFF",

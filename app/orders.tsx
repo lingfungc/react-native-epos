@@ -2,9 +2,10 @@ import { ordersCollection } from "@/db";
 import Order from "@/models/Order";
 import { OrderService } from "@/services/OrderService";
 import { Q } from "@nozbe/watermelondb";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -15,10 +16,139 @@ import {
 
 type OrderStatus = "open" | "closed" | "voided";
 
+interface GroupedOrders {
+  date: string;
+  orders: Order[];
+}
+
+// Animated Group Component
+const AnimatedGroup = ({
+  item,
+  isExpanded,
+  onToggle,
+  renderOrderItem,
+}: {
+  item: GroupedOrders;
+  isExpanded: boolean;
+  onToggle: () => void;
+  renderOrderItem: (props: { item: Order }) => JSX.Element;
+}) => {
+  const animatedHeight = useRef(new Animated.Value(0)).current;
+  const animatedRotation = useRef(new Animated.Value(0)).current;
+  const animatedOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(animatedHeight, {
+        toValue: isExpanded ? 1 : 0,
+        useNativeDriver: false, // Changed to false for maxHeight
+        friction: 8,
+        tension: 40,
+      }),
+      Animated.timing(animatedRotation, {
+        toValue: isExpanded ? 1 : 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(animatedOpacity, {
+        toValue: isExpanded ? 1 : 0,
+        duration: 200,
+        useNativeDriver: false, // Changed to false for opacity
+      }),
+    ]).start();
+  }, [isExpanded]);
+
+  const rotateInterpolate = animatedRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "90deg"],
+  });
+
+  return (
+    <View style={styles.groupContainer}>
+      <TouchableOpacity
+        style={styles.dateHeader}
+        onPress={onToggle}
+        activeOpacity={0.7}
+      >
+        <View style={styles.dateHeaderLeft}>
+          <Text style={styles.dateHeaderText}>{item.date}</Text>
+          <Text style={styles.dateHeaderCount}>
+            {item.orders.length} order{item.orders.length !== 1 ? "s" : ""}
+          </Text>
+        </View>
+        <Animated.View
+          style={{
+            transform: [{ rotate: rotateInterpolate }],
+          }}
+        >
+          <Text style={styles.expandIcon}>▶</Text>
+        </Animated.View>
+      </TouchableOpacity>
+
+      <Animated.View
+        style={[
+          styles.ordersContainer,
+          {
+            maxHeight: animatedHeight.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 10000],
+            }),
+            opacity: animatedOpacity,
+          },
+        ]}
+      >
+        {item.orders.map((order) => (
+          <Animated.View
+            key={order.id}
+            style={{
+              transform: [
+                {
+                  translateY: animatedHeight.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-10, 0],
+                  }),
+                },
+              ],
+            }}
+          >
+            {renderOrderItem({ item: order })}
+          </Animated.View>
+        ))}
+      </Animated.View>
+    </View>
+  );
+};
+
 export default function OrdersScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+
+  // Group orders by date
+  const groupedOrders: GroupedOrders[] = React.useMemo(() => {
+    const groups: { [key: string]: Order[] } = {};
+
+    orders.forEach((order) => {
+      const date = new Date(order.createdAt);
+      const dateKey = date.toLocaleDateString("en-GB", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+      groups[dateKey].push(order);
+    });
+
+    return Object.entries(groups).map(([date, orders]) => ({
+      date,
+      orders,
+    }));
+  }, [orders]);
 
   useEffect(() => {
     const subscription = ordersCollection
@@ -36,8 +166,6 @@ export default function OrdersScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // The observe subscription will automatically update when data changes
-    // Just wait a moment for the refresh to complete
     setTimeout(() => setRefreshing(false), 500);
   };
 
@@ -47,6 +175,18 @@ export default function OrdersScreen() {
     } catch (error) {
       console.error("Error creating order:", error);
     }
+  };
+
+  const toggleDateExpansion = (date: string) => {
+    setExpandedDates((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(date)) {
+        newSet.delete(date);
+      } else {
+        newSet.add(date);
+      }
+      return newSet;
+    });
   };
 
   const formatDate = (timestamp: number | undefined): string => {
@@ -221,6 +361,19 @@ export default function OrdersScreen() {
     );
   };
 
+  const renderGroup = ({ item }: { item: GroupedOrders }) => {
+    const isExpanded = expandedDates.has(item.date);
+
+    return (
+      <AnimatedGroup
+        item={item}
+        isExpanded={isExpanded}
+        onToggle={() => toggleDateExpansion(item.date)}
+        renderOrderItem={renderOrderItem}
+      />
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -258,9 +411,9 @@ export default function OrdersScreen() {
         </View>
       ) : (
         <FlatList
-          data={orders}
-          renderItem={renderOrderItem}
-          keyExtractor={(item) => item.id}
+          data={groupedOrders}
+          renderItem={renderGroup}
+          keyExtractor={(item) => item.date}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -349,6 +502,53 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 12,
     paddingBottom: 20,
+  },
+  groupContainer: {
+    marginBottom: 8,
+    overflow: "hidden",
+  },
+  dateHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 8,
+    marginBottom: 4,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  dateHeaderLeft: {
+    flex: 1,
+  },
+  dateHeaderText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#212121",
+    marginBottom: 2,
+  },
+  dateHeaderCount: {
+    fontSize: 13,
+    color: "#757575",
+    fontWeight: "500",
+  },
+  expandIcon: {
+    fontSize: 14,
+    color: "#2196F3",
+    marginLeft: 12,
+    fontWeight: "bold",
+  },
+  ordersContainer: {
+    marginTop: 4,
+    overflow: "hidden",
   },
   orderCard: {
     backgroundColor: "#FFFFFF",
