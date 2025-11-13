@@ -1,5 +1,5 @@
 import { ClientService } from "@/services/ClientService";
-import { OutboxService } from "@/services/OutboxService";
+import { EventService } from "@/services/EventService";
 import { RelayService } from "@/services/RelayService";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DeviceService } from "../services/DeviceService";
@@ -72,7 +72,7 @@ export function useTcpService(): UseTcpServiceResult {
   }, [tcpService]);
 
   // Set up persistent delegate
-useEffect(() => {
+  useEffect(() => {
     delegateRef.current = {
       onConnectionEstablished: (info) => {
         console.log("📡 Connection established:", info);
@@ -133,11 +133,11 @@ useEffect(() => {
           console.log("Applied event IDs:", message.data.appliedEventIds);
 
           try {
-            // Confirm the events in outbox
-            await OutboxService.confirmApplied(message.data.appliedEventIds);
-            console.log("✅ [Client Mode] Outbox confirmed as synced");
+            // Mark events as acked in client database
+            await EventService.markEventsAsAcked(message.data.appliedEventIds);
+            console.log("✅ [Client Mode] Events marked as acked");
           } catch (error) {
-            console.error("❌ [Client Mode] Error confirming outbox:", error);
+            console.error("❌ [Client Mode] Error marking events as acked:", error);
           }
         }
 

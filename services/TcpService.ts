@@ -26,7 +26,9 @@ export interface TcpMessage {
     | "join"
     | "leave"
     | "ack"
-    | "broadcast";
+    | "broadcast"
+    | "applied"
+    | "processed";
   deviceId: string;
   userId: string;
   venueId: string;
@@ -63,7 +65,7 @@ class TcpService {
   private clientsInfo: Map<string, Partial<TcpConnectionInfo>> = new Map();
   private role: TcpRole = "none";
   private delegate: TcpServiceDelegate | null = null;
-  private heartbeatInterval: NodeJS.Timeout | null = null;
+  private heartbeatInterval: number | null = null;
 
   // constructor() {
   // }
